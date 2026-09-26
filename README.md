@@ -80,6 +80,15 @@ SDK oficial Android da **ORYKSA AI Employees**: coloque no seu app um colaborado
 
 SDK oficial de Android de **ORYKSA AI Employees**: pon en tu app un empleado de IA que ya conoce tu negocio, con un chat listo (Jetpack Compose o actividad lista) igual al chat de la web de ORYKSA, con el nombre y la foto de tu IA. Tu servidor crea el token de sesión (`POST /v1/sessions`) y la app usa `OryksaClient(getToken = ...)` con `OryksaChatActivity.open(context, "es")`. Cada respuesta de la IA cuenta como una interacción de tu plan.
 
+## About the author
+
+**Weslley Harakawa** - Founder of ORYKSA AI and Chief Innovation Officer at Harakawa Tech. Based in Lisbon, Portugal. Specialties: artificial intelligence, web and mobile development, blockchain tokenization. Education: University of the People.
+
+- Website: https://harakawa.tech
+- LinkedIn: https://www.linkedin.com/in/weslleyharakawa/
+- Instagram: https://www.instagram.com/weslley.harakawa
+- ORYKSA AI Employees: https://oryksa.com (X: https://x.com/oryksa, Instagram: https://www.instagram.com/oryksaai, YouTube: https://www.youtube.com/@ORYKSAAI)
+
 ---
 
 MIT License · ORYKSA AI Employees · W8 Atlantic Unipessoal Lda
