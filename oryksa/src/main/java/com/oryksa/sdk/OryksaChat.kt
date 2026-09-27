@@ -143,6 +143,12 @@ fun OryksaChat(
     var voiceOpen by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
 
+    var profReady by remember { mutableStateOf(0) }
+    LaunchedEffect(lg) {
+        // Swear words the customer types show as asterisks (one list for every ORYKSA chat).
+        OryksaProfanity.load(lg)
+        profReady++
+    }
     LaunchedEffect(client, lg) {
         try {
             val a = client.agent()
@@ -209,7 +215,7 @@ fun OryksaChat(
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                             .alpha(if (m.role == "typing") 0.6f else 1f)
                     ) {
-                        SelectionContainer { Text(oryksaBold(m.text), color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
+                        SelectionContainer { Text(oryksaBold(if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text), color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
                     }
                 }
             }
