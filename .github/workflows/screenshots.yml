@@ -1,5 +1,7 @@
 name: Screenshots
 on:
+  push:
+    branches: [voice-1.1]
   workflow_dispatch:
 jobs:
   android:
