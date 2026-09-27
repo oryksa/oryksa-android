@@ -30,6 +30,6 @@ jobs:
             mkdir -p shots
             adb install -r example/build/outputs/apk/debug/example-debug.apk
             adb shell pm grant com.oryksa.example android.permission.RECORD_AUDIO
-            for s in product chat voice; do adb shell am start -S -n com.oryksa.example/.MainActivity --es screen $s --es lang pt; sleep 15; adb exec-out screencap -p > shots/android_$s.png; done
+            for s in product chat voice; do adb shell am start -S -n com.oryksa.example/.MainActivity --es screen $s --es lang pt; if [ $s = voice ]; then sleep 4; else sleep 15; fi; adb exec-out screencap -p > shots/android_$s.png; done
       - uses: actions/upload-artifact@v4
         with: { name: android-screenshots, path: shots/*.png }
