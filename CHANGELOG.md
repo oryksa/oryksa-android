@@ -2,6 +2,7 @@
 
 ## 1.1.0
 
+* Copy button under each reply of the AI (copies the text, shows a check for a moment), as in the ORYKSA apps and extension.
 * Voice: a voice screen with the photo of the AI ("I'm listening" / her answer, Mute, Close) opened from the microphone in the chat. The same behaviour as the ORYKSA app: the microphone stays open while she speaks and only a human voice cuts her off (typing, TV, birds and her own echo do not); she stops on the word and the text stays in the chat; the second before the cut is kept; 700 ms of silence closes a sentence (15 s at most); a whisper gets a whispered, shorter answer; her voice is the one chosen in ORYKSA and, if it fails, the text is shown without a robot voice.
 * The voice engine is the ORYKSA app engine (`Vad`), with the same audio tests on real recordings.
 * `appContext`: tell the AI which screen of your app the customer is on (product, cart, booking) so it answers about it.

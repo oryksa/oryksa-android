@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,7 +53,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -66,6 +78,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URL
@@ -80,13 +93,40 @@ data class OryksaChatTheme(
 )
 
 internal val oryksaTexts = mapOf(
-    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice"),
-    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz"),
-    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz"),
-    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz"),
+    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice", "copy" to "Copy"),
+    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz", "copy" to "Copiar"),
+    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz", "copy" to "Copiar"),
+    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz", "copy" to "Copiar"),
 )
 
 internal fun oryksaLang(l: String) = if (oryksaTexts.containsKey(l)) l else "en"
+
+/** Small copy button under a reply: copies the text and shows a check for a moment. */
+@Composable
+private fun CopyButton(text: String, label: String, color: Color) {
+    val clipboard = LocalClipboardManager.current
+    var done by remember { mutableStateOf(false) }
+    LaunchedEffect(done) { if (done) { delay(1200); done = false } }
+    Box(
+        Modifier.padding(top = 2.dp).clip(RoundedCornerShape(7.dp))
+            .clickable { clipboard.setText(AnnotatedString(text)); done = true }
+            .semantics { contentDescription = label }
+            .padding(6.dp)
+    ) {
+        Canvas(Modifier.size(15.dp)) {
+            val w = size.width / 24f
+            val st = Stroke(width = 2f * w, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            if (done) {
+                val p = Path().apply { moveTo(20f * w, 6f * w); lineTo(9f * w, 17f * w); lineTo(4f * w, 12f * w) }
+                drawPath(p, color, style = st)
+            } else {
+                drawRoundRect(color, topLeft = Offset(9f * w, 9f * w), size = Size(11f * w, 11f * w), cornerRadius = CornerRadius(2f * w), style = st)
+                val p = Path().apply { moveTo(5f * w, 15f * w); lineTo(5f * w, 5f * w); quadraticBezierTo(5f * w, 3f * w, 7f * w, 3f * w); lineTo(17f * w, 3f * w) }
+                drawPath(p, color, style = st)
+            }
+        }
+    }
+}
 
 private data class ChatMsg(val id: Long, val role: String, val text: String)
 
@@ -206,6 +246,7 @@ fun OryksaChat(
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(msgs, key = { it.id }) { m ->
+              Column(Modifier.fillMaxWidth()) {
                 val mine = m.role == "user"
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
                     Box(
@@ -218,6 +259,9 @@ fun OryksaChat(
                         SelectionContainer { Text(oryksaBold(if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text), color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
                     }
                 }
+                // Copy button under each reply of the AI (same as the ORYKSA apps and extension).
+                if (!mine && m.role != "typing" && m.text.isNotBlank()) CopyButton(m.text.replace("**", ""), tx.getValue("copy"), theme.muted)
+              }
             }
         }
         if (sug.isNotEmpty()) {
