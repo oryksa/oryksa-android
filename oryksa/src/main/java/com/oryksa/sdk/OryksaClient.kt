@@ -10,7 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** SDK version sent in the `X-ORYKSA-SDK` header. */
-const val ORYKSA_SDK_VERSION = "1.0.0"
+const val ORYKSA_SDK_VERSION = "1.1.0"
 
 /**
  * Error returned by the ORYKSA API. [code] is stable, for example `interaction_limit_reached`,
@@ -28,7 +28,14 @@ data class OryksaAgent(
     val suggestions: Map<String, List<String>> = emptyMap(),
     val voiceReplies: Boolean = false,
     val conversationId: String? = null,
+    /** ElevenLabs voice chosen for the AI in ORYKSA (the server speaks with it). */
+    val voice: String? = null,
+    /** Main language of the AI (`pt`, `en`, `es`...), from ORYKSA. */
+    val language: String? = null,
 ) {
+    /** The AI photo from "Your AI" in ORYKSA (never the owner's photo). Same as [avatar]. */
+    val photo: String get() = avatar
+
     companion object {
         const val DEFAULT_AVATAR = "https://oryksa.com/assets/img/avatar_official_oryksa.png"
 
@@ -49,6 +56,8 @@ data class OryksaAgent(
                 suggestions = listMap(j.optJSONObject("suggestions")),
                 voiceReplies = j.optBoolean("voice_replies", false),
                 conversationId = j.optString("conversation_id").takeIf { it.isNotBlank() && it != "null" },
+                voice = j.optString("voice").takeIf { it.isNotBlank() && it != "null" },
+                language = j.optString("language").takeIf { it.isNotBlank() && it != "null" },
             )
         }
 
@@ -61,8 +70,35 @@ data class OryksaAgent(
 /** One message of the conversation (`user` or `assistant`). */
 data class OryksaMessage(val role: String, val content: String)
 
-/** Answer of [OryksaClient.send]: `replied` with the text, or `pending` while the AI is still writing. */
-data class OryksaReply(val status: String, val reply: String?, val conversationId: String?)
+/**
+ * Answer of [OryksaClient.send]: `replied` with the text, or `pending` while the AI is still writing.
+ * With `voice = true`, [speech] is the short spoken version (1-2 sentences, no markdown); the whole
+ * [reply] stays in the chat. [whisper]: the customer whispered, speak it whispered.
+ */
+data class OryksaReply(
+    val status: String,
+    val reply: String?,
+    val conversationId: String?,
+    val speech: String? = null,
+    val whisper: Boolean = false,
+)
+
+/** Where the customer is inside your app. Sent with each message so the AI answers about the current screen. */
+data class OryksaAppContext(
+    /** Screen id, for example `product`, `cart`, `booking`. */
+    val screen: String? = null,
+    /** Title shown on the screen, for example the product name and price. */
+    val title: String? = null,
+    /** What is listed on the screen (products, services, times). Up to 20. */
+    val items: List<String> = emptyList(),
+) {
+    /** JSON sent to the API. */
+    fun toJson(): JSONObject = JSONObject().apply {
+        screen?.let { put("screen", it) }
+        title?.let { put("title", it) }
+        if (items.isNotEmpty()) put("items", JSONArray(items.take(20)))
+    }
+}
 
 /**
  * In-app client. Uses a short-lived session token (`oryk_cs_...`) created by YOUR server with
@@ -89,7 +125,8 @@ class OryksaClient(
         return token?.takeIf { it.isNotBlank() } ?: throw OryksaException(401, "no_token", "No session token.")
     }
 
-    private suspend fun raw(method: String, path: String, body: JSONObject?, force: Boolean): JSONObject {
+    /** One HTTP exchange: returns the raw bytes of a successful answer, throws [OryksaException] otherwise. */
+    private suspend fun exchange(method: String, path: String, payload: ByteArray?, contentType: String?, force: Boolean): ByteArray {
         val tok = currentToken(force)
         return withContext(Dispatchers.IO) {
             val c = (URL(base + path).openConnection() as HttpURLConnection).apply {
@@ -99,22 +136,21 @@ class OryksaClient(
                 setRequestProperty("Authorization", "Bearer $tok")
                 setRequestProperty("X-ORYKSA-SDK", "android/$ORYKSA_SDK_VERSION")
                 setRequestProperty("Accept", "application/json")
-                if (body != null) {
+                if (payload != null) {
                     doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Content-Type", contentType ?: "application/json")
                 }
             }
             try {
-                if (body != null) c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                if (payload != null) c.outputStream.use { it.write(payload) }
                 val status = c.responseCode
-                val text = (if (status >= 400) c.errorStream else c.inputStream)?.bufferedReader()?.use { it.readText() } ?: ""
-                val json = runCatching { JSONObject(text) }.getOrElse { JSONObject() }
+                val bytes = (if (status >= 400) c.errorStream else c.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
                 if (status >= 400) {
-                    val e = json.optJSONObject("error")
+                    val e = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrElse { JSONObject() }.optJSONObject("error")
                     throw OryksaException(status, e?.optString("code")?.ifBlank { null } ?: "http_$status",
                         e?.optString("message")?.ifBlank { null } ?: "Request failed with HTTP $status")
                 }
-                json
+                bytes
             } catch (e: IOException) {
                 throw OryksaException(0, "network_error", "Could not reach ORYKSA: ${e.message}")
             } finally {
@@ -123,20 +159,89 @@ class OryksaClient(
         }
     }
 
-    private suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject = try {
-        raw(method, path, body, false)
+    private suspend fun exchangeRetry(method: String, path: String, payload: ByteArray?, contentType: String?): ByteArray = try {
+        exchange(method, path, payload, contentType, false)
     } catch (e: OryksaException) {
-        if ((e.code == "session_expired" || e.status == 401) && getToken != null) raw(method, path, body, true) else throw e
+        if ((e.code == "session_expired" || e.status == 401) && getToken != null) exchange(method, path, payload, contentType, true) else throw e
+    }
+
+    private suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
+        val bytes = exchangeRetry(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
+        return runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrElse { JSONObject() }
     }
 
     /** Name, photo, greeting and suggestions of the AI employee. */
     suspend fun agent(): OryksaAgent = OryksaAgent.fromJson(request("GET", "/client/agent"))
 
-    /** Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait]. */
-    suspend fun send(message: String): OryksaReply {
-        val j = request("POST", "/client/chat", JSONObject().put("message", message))
+    /**
+     * Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait].
+     * [appContext]: the screen the customer is on inside your app. [voice]: the reply will be heard (it also
+     * carries a short `speech`). [whisper]: the customer whispered. [voiceStats]: audio numbers of the voice turn.
+     */
+    suspend fun send(
+        message: String,
+        appContext: OryksaAppContext? = null,
+        voice: Boolean = false,
+        whisper: Boolean = false,
+        voiceStats: JSONObject? = null,
+    ): OryksaReply {
+        val body = JSONObject().put("message", message)
+        appContext?.let { body.put("app_context", it.toJson()) }
+        if (voice) body.put("voice", true)
+        if (whisper) body.put("whisper", true)
+        if (voiceStats != null) body.put("platform", "android").put("voice_stats", voiceStats)
+        val j = request("POST", "/client/chat", body)
         return OryksaReply(j.optString("status", "replied"), j.optString("reply").takeIf { it.isNotBlank() && it != "null" },
-            j.optString("conversation_id").takeIf { it.isNotBlank() })
+            j.optString("conversation_id").takeIf { it.isNotBlank() },
+            j.optString("speech").takeIf { it.isNotBlank() && it != "null" }, j.optBoolean("whisper", false))
+    }
+
+    /** Like [sendAndWait], but returns the whole [OryksaReply] (with `speech` when [voice] is on). */
+    suspend fun sendAndWaitReply(
+        message: String,
+        maxWaitMs: Long = 40_000,
+        appContext: OryksaAppContext? = null,
+        voice: Boolean = false,
+        whisper: Boolean = false,
+        voiceStats: JSONObject? = null,
+    ): OryksaReply {
+        val r = send(message, appContext, voice, whisper, voiceStats)
+        if (r.status != "pending") return r
+        val end = System.currentTimeMillis() + maxWaitMs
+        while (System.currentTimeMillis() < end) {
+            delay(1_500)
+            val last = messages().lastOrNull()
+            if (last?.role == "assistant") return OryksaReply("replied", last.content, r.conversationId, whisper = whisper)
+        }
+        return r
+    }
+
+    /**
+     * The AI's voice (ElevenLabs, the voice chosen in ORYKSA) for one reply of this conversation, as MP3.
+     * Returns null when the voice is not available: then show the text only (never a robot voice).
+     */
+    suspend fun tts(text: String, whisper: Boolean = false): ByteArray? = runCatching {
+        val body = JSONObject().put("text", text)
+        if (whisper) body.put("whisper", true)
+        exchangeRetry("POST", "/client/tts", body.toString().toByteArray(Charsets.UTF_8), "application/json")
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+
+    /**
+     * Turns the customer's voice into text. [wav] is 16 kHz mono PCM16 WAV, up to 15 seconds.
+     * Returns "" when nothing was said and null when it failed.
+     */
+    suspend fun transcribe(wav: ByteArray): String? = runCatching {
+        val boundary = "oryksa-" + System.nanoTime()
+        val head = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.wav\"\r\nContent-Type: audio/wav\r\n\r\n"
+        val tail = "\r\n--$boundary--\r\n"
+        val body = head.toByteArray(Charsets.UTF_8) + wav + tail.toByteArray(Charsets.UTF_8)
+        val bytes = exchangeRetry("POST", "/client/transcribe", body, "multipart/form-data; boundary=$boundary")
+        JSONObject(String(bytes, Charsets.UTF_8)).optString("text").trim()
+    }.getOrNull()
+
+    /** Reports a voice turn that produced no message (nothing heard, a cut with nothing said). */
+    suspend fun voiceStats(stats: JSONObject) {
+        runCatching { request("POST", "/client/voice-stats", JSONObject().put("platform", "android").put("voice_stats", stats)) }
     }
 
     /** Messages of this conversation. */
@@ -148,15 +253,6 @@ class OryksaClient(
     }
 
     /** Sends a message and waits for the reply text. */
-    suspend fun sendAndWait(message: String, maxWaitMs: Long = 40_000): String? {
-        val r = send(message)
-        if (r.status != "pending") return r.reply
-        val end = System.currentTimeMillis() + maxWaitMs
-        while (System.currentTimeMillis() < end) {
-            delay(1_500)
-            val last = messages().lastOrNull()
-            if (last?.role == "assistant") return last.content
-        }
-        return null
-    }
+    suspend fun sendAndWait(message: String, maxWaitMs: Long = 40_000, appContext: OryksaAppContext? = null): String? =
+        sendAndWaitReply(message, maxWaitMs, appContext).reply
 }

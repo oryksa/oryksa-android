@@ -80,15 +80,18 @@ data class OryksaChatTheme(
 )
 
 internal val oryksaTexts = mapOf(
-    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again."),
-    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo."),
-    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo."),
-    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo."),
+    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice"),
+    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz"),
+    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz"),
+    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz"),
 )
 
 internal fun oryksaLang(l: String) = if (oryksaTexts.containsKey(l)) l else "en"
 
 private data class ChatMsg(val id: Long, val role: String, val text: String)
+
+@Composable
+internal fun OryksaAvatarImage(url: String?, size: Int) = Avatar(url, size)
 
 @Composable
 private fun Avatar(url: String?, size: Int) {
@@ -103,7 +106,21 @@ private fun Avatar(url: String?, size: Int) {
     }
 }
 
-/** The ORYKSA chat panel: header with the photo and name of the AI, messages, suggestions and input. */
+/** Text with **bold** parts (the server marks them, the app only draws them). */
+internal fun oryksaBold(text: String) = buildAnnotatedString {
+    val parts = text.split("**")
+    if (parts.size < 3) { append(text); return@buildAnnotatedString }
+    parts.forEachIndexed { i, p ->
+        if (p.isEmpty()) return@forEachIndexed
+        if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(p) } else append(p)
+    }
+}
+
+/**
+ * The ORYKSA chat panel: header with the photo and name of the AI, messages, suggestions, input and
+ * (when the plan has voice) the microphone that opens the voice conversation.
+ * [appContext]: where the customer is in your app right now, sent with each message.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OryksaChat(
@@ -112,6 +129,8 @@ fun OryksaChat(
     lang: String = "en",
     theme: OryksaChatTheme = OryksaChatTheme(),
     onClose: (() -> Unit)? = null,
+    appContext: (() -> OryksaAppContext?)? = null,
+    voice: Boolean = true,
 ) {
     val lg = oryksaLang(lang)
     val tx = oryksaTexts.getValue(lg)
@@ -121,6 +140,7 @@ fun OryksaChat(
     var sug by remember { mutableStateOf(listOf<String>()) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var voiceOpen by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
 
     LaunchedEffect(client, lg) {
@@ -147,11 +167,20 @@ fun OryksaChat(
         val id = System.nanoTime()
         msgs.add(ChatMsg(id, "user", q)); msgs.add(ChatMsg(id + 1, "typing", "..."))
         scope.launch {
-            val reply = runCatching { client.sendAndWait(q) }.getOrNull()
+            val reply = runCatching { client.sendAndWait(q, appContext = appContext?.invoke()) }.getOrNull()
             msgs.removeAll { it.role == "typing" }
             msgs.add(ChatMsg(id + 2, "assistant", reply ?: tx.getValue("err")))
             busy = false
         }
+    }
+
+    val voiceAgent = agent
+    if (voiceOpen && voiceAgent != null) {
+        OryksaVoiceScreen(client = client, agent = voiceAgent, onClose = { voiceOpen = false }, lang = lg, theme = theme,
+            appContext = appContext,
+            onUserText = { sug = emptyList(); msgs.add(ChatMsg(System.nanoTime(), "user", it)) },
+            onReply = { msgs.add(ChatMsg(System.nanoTime(), "assistant", it)) })
+        return
     }
 
     Column(modifier.fillMaxSize().background(theme.background).imePadding()) {
@@ -180,7 +209,7 @@ fun OryksaChat(
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                             .alpha(if (m.role == "typing") 0.6f else 1f)
                     ) {
-                        SelectionContainer { Text(m.text, color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
+                        SelectionContainer { Text(oryksaBold(m.text), color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
                     }
                 }
             }
@@ -210,6 +239,10 @@ fun OryksaChat(
                     focusedTextColor = theme.ink, unfocusedTextColor = theme.ink,
                 ),
             )
+            if (voice && agent?.voiceReplies == true && input.isBlank()) {
+                Box(Modifier.fillMaxHeight().clickable(enabled = !busy) { voiceOpen = true }.padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center) { MicGlyph(theme.accent) }
+            }
             Box(Modifier.fillMaxHeight().background(theme.accent.copy(alpha = if (busy) 0.6f else 1f))
                 .clickable(enabled = !busy) { send(input) }.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
                 Text(tx.getValue("send").uppercase(), color = Color.White, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
@@ -260,6 +293,9 @@ class OryksaChatActivity : ComponentActivity() {
         /** Client used by the activity. Set it once, for example in your Application class. */
         @JvmStatic var client: OryksaClient? = null
 
+        /** Where the customer is in your app when the chat opens (sent with each message). */
+        @JvmStatic var appContext: OryksaAppContext? = null
+
         /** Opens the chat. */
         @JvmStatic @JvmOverloads
         fun open(context: Context, lang: String = "en") {
@@ -272,6 +308,6 @@ class OryksaChatActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val c = client ?: run { finish(); return }
         val lang = intent.getStringExtra("lang") ?: "en"
-        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }) }
+        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }, appContext = { appContext }) }
     }
 }
