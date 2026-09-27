@@ -45,6 +45,7 @@ mavenPublishing {
         description.set("Official Android SDK for ORYKSA AI Employees: in-app AI chat (Jetpack Compose) and API v1 client.")
         url.set("https://developer.oryksa.com/en/sdks")
         licenses { license { name.set("MIT License"); url.set("https://opensource.org/licenses/MIT") } }
+        organization { name.set("W8 Atlantic Unipessoal Lda"); url.set("https://oryksa.com") }
         developers { developer { id.set("oryksa"); name.set("ORYKSA AI Employees"); email.set("info@oryksa.com") } }
         scm {
             url.set("https://github.com/oryksa/oryksa-android")
