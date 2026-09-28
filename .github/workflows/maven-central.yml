@@ -1,0 +1,43 @@
+name: Maven Central
+
+# Publishes com.oryksa:sdk to Maven Central (Central Portal) when a version tag is pushed (e.g. 1.2.0),
+# or by hand (Actions > Maven Central > Run workflow) for the version in oryksa/build.gradle.kts.
+# Secrets: MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD (Central Portal user token),
+#          SIGNING_KEY (ASCII-armored private key) / SIGNING_KEY_PASSWORD.
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Tag and library version match
+        if: github.ref_type == 'tag'
+        run: |
+          v=$(sed -n 's/.*coordinates("com.oryksa", "sdk", "\(.*\)").*/\1/p' oryksa/build.gradle.kts)
+          echo "library $v, tag $GITHUB_REF_NAME"
+          test "$v" = "$GITHUB_REF_NAME"
+
+      - name: Secrets present
+        env:
+          U: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          P: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          K: ${{ secrets.SIGNING_KEY }}
+        run: |
+          test -n "$U" -a -n "$P" || { echo "MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD secrets are missing"; exit 1; }
+          test -n "$K" || { echo "SIGNING_KEY secret is missing"; exit 1; }
+
+      - name: Publish and release to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: chmod +x gradlew && ./gradlew :oryksa:publishAndReleaseToMavenCentral --no-configuration-cache --stacktrace
