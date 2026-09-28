@@ -10,19 +10,19 @@ Official Android SDK for **ORYKSA AI Employees**. Put an AI employee that alread
 
 ## Install
 
-Maven Central:
+Maven Central (no extra repository needed):
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.0.0")
+    implementation("com.oryksa:sdk:1.1.0")
 }
 ```
 
-JitPack (same code, straight from GitHub):
+Alternative, JitPack (same code, straight from GitHub):
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.0.0")
+implementation("com.github.oryksa:oryksa-android:1.1.0")
 ```
 
 ## What it is for
