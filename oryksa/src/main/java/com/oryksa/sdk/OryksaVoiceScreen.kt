@@ -89,7 +89,6 @@ fun OryksaVoiceScreen(
     val t = oryksaVoiceTexts[lang] ?: oryksaVoiceTexts.getValue("en")
     val phase by controller.phase.collectAsState()
     val reply by controller.lastReply.collectAsState()
-    val heard by controller.lastHeard.collectAsState()
     val ctx = LocalContext.current
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { controller.start() }
     LaunchedEffect(controller) {
@@ -101,7 +100,8 @@ fun OryksaVoiceScreen(
     val (title, sub) = when (phase) {
         OryksaVoicePhase.STARTING, OryksaVoicePhase.LISTENING -> t.getValue("listening") to t.getValue("listeningSub")
         OryksaVoicePhase.HEARING -> t.getValue("listening") to t.getValue("hearing")
-        OryksaVoicePhase.THINKING -> (heard.ifEmpty { "..." }) to t.getValue("thinking")
+        // never the words the person said on screen: only "listening" in the interface language; her answer shows as text
+        OryksaVoicePhase.THINKING -> t.getValue("listening") to t.getValue("thinking")
         OryksaVoicePhase.SPEAKING -> agent.name to reply
         OryksaVoicePhase.MUTED -> t.getValue("muted") to t.getValue("mutedSub")
         OryksaVoicePhase.MIC_ERROR -> t.getValue("micError") to t.getValue("micErrorSub")

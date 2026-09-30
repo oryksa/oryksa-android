@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Voice screen: the words the person says are never shown on screen. While the AI thinks it shows "I'm listening" / "One moment..." in the interface language; the AI's answer still shows as text. Same behaviour as the ORYKSA apps, web and extensions.
+
 ## 1.1.0
 
 * Copy button under each reply of the AI (copies the text, shows a check for a moment), as in the ORYKSA apps and extension.

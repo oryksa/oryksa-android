@@ -10,7 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** SDK version sent in the `X-ORYKSA-SDK` header. */
-const val ORYKSA_SDK_VERSION = "1.1.0"
+const val ORYKSA_SDK_VERSION = "1.1.1"
 
 /**
  * Error returned by the ORYKSA API. [code] is stable, for example `interaction_limit_reached`,
