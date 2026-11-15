@@ -4,9 +4,15 @@
 
 [![English](https://img.shields.io/badge/English-30363d?style=for-the-badge)](README.md) [![Português](https://img.shields.io/badge/Portugu%C3%AAs-30363d?style=for-the-badge)](README.pt.md) [![Español](https://img.shields.io/badge/Espa%C3%B1ol-0891b2?style=for-the-badge)](README.es.md) [![Français](https://img.shields.io/badge/Fran%C3%A7ais-30363d?style=for-the-badge)](README.fr.md)
 
-SDK oficial de Android de **ORYKSA AI Employees**: pon en tu app un empleado de IA que ya conoce tu negocio, con un chat listo (Jetpack Compose o actividad lista) igual al chat de la web de ORYKSA, con el nombre y la foto de tu IA. Tu servidor crea el token de sesión (`POST /v1/sessions`) y la app usa `OryksaClient(getToken = ...)` con `OryksaChatActivity.open(context, "es")`. Cada respuesta de la IA cuenta como una interacción de tu plan.
+SDK oficial de Android de **ORYKSA AI Employees**. Pon dentro de tu app Android un empleado de IA que ya conoce tu negocio: un chat listo en Jetpack Compose (y una actividad lista para apps con Views) con el mismo aspecto que el chat de la web de ORYKSA, el nombre y la foto de tu IA desde tu cuenta ORYKSA, en inglés, portugués y español.
+
+* Documentación: https://developer.oryksa.com/es/sdks
+* API: `https://api.oryksa.com/v1`
+* Android 6.0 o superior (minSdk 23).
 
 ## Instalar
+
+Maven Central (no hace falta ningún repositorio adicional):
 
 ```kotlin
 dependencies {
@@ -14,12 +20,70 @@ dependencies {
 }
 ```
 
+Alternativa, JitPack (el mismo código, directamente desde GitHub):
+
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
 implementation("com.github.oryksa:oryksa-android:1.1.0")
 ```
 
-**Documentación completa:** https://developer.oryksa.com/es/sdk-android
+## Para qué sirve
+
+El SDK pone el chat y la voz de ORYKSA dentro de tu app para atender a los **clientes de tu negocio**: preguntan, compran y reservan. La IA responde con tu Brain, tus productos y tus servicios, con el nombre, la foto y la voz que elegiste en *Tu IA*, y guarda leads, reservas y ventas en las Actividades de tu cuenta ORYKSA. **No** es una interfaz para el dueño: a través del SDK nadie cambia ajustes, lee las Actividades ni da órdenes a ORYKSA. Más información: https://help.oryksa.com/es/a/sdks-what-they-do
+
+Las palabrotas que escribe el cliente aparecen con asteriscos en el chat (la misma lista de todos los chats de ORYKSA, cargada desde `https://app.oryksa.com/widget/profanity.json` y guardada 24 horas). Las respuestas de la IA ya vienen filtradas desde el servidor.
+
+## Voz y contexto de la app (1.1)
+
+El chat muestra un micrófono cuando tu plan incluye voz. Abre la pantalla de voz con el mismo comportamiento que la app de ORYKSA: el micrófono sigue abierto mientras ella habla y solo una voz humana la interrumpe (el tecleo, la televisión y su propio eco no); se detiene en la palabra y el texto queda en el chat; a un susurro responde con un susurro; si su voz falla, se muestra el texto (nunca una voz robótica).
+
+Permiso de micrófono: el manifiesto del SDK declara `RECORD_AUDIO`; la pantalla de voz lo pide cuando el cliente la abre.
+
+```kotlin
+OryksaChat(client, lang = "pt",
+    appContext = { OryksaAppContext(screen = "product", title = "Sky Beginner Snowboard, 489.95") })
+```
+
+## Cómo funciona (y por qué la clave está segura)
+
+1. Tu **servidor** guarda la clave secreta de la API (`oryk_live_...`, creada en developer.oryksa.com) y crea un **token de sesión** de corta duración para cada usuario que ha iniciado sesión, con `POST /v1/sessions`.
+2. Tu **app** recibe solo ese token de sesión (`oryk_cs_...`). La clave secreta nunca entra en la app.
+3. Cada respuesta de la IA cuenta como una interacción de tu plan ORYKSA, igual que en WhatsApp.
+
+## Jetpack Compose
+
+```kotlin
+val client = OryksaClient(getToken = { myBackend.fetchOryksaToken() }) // devuelve "oryk_cs_..."
+OryksaChatActivity.client = client
+
+Box(Modifier.fillMaxSize()) {
+    MyScreens()
+    OryksaChatButton(
+        client = client,
+        onClick = { OryksaChatActivity.open(context, lang = "en") }, // en, pt, br, es
+        modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+    )
+}
+```
+
+O coloca el panel en cualquier lugar con `OryksaChat(client = client)`. Colores: `OryksaChatTheme(accent = Color(0xFF5B57E0))`.
+
+## Apps con Views (Java o Kotlin)
+
+```kotlin
+OryksaChatActivity.client = OryksaClient(getToken = { myBackend.fetchOryksaToken() })
+button.setOnClickListener { OryksaChatActivity.open(this, "en") }
+```
+
+Sin la interfaz (corrutinas): `client.agent()`, `client.sendAndWait("Are you open on Saturday?")`, `client.messages()`.
+
+## Mantén la IA sincronizada con tu app
+
+En tu servidor (por ejemplo con `@oryksa/sdk` en Node): `oryksa.learnApp({ name, description, screens, faq })`.
+
+## Errores
+
+Las llamadas que fallan lanzan `OryksaException` con `status`, `code` (por ejemplo `interaction_limit_reached`, `rate_limited`, `plan_required`) y `message`.
 
 ---
 
