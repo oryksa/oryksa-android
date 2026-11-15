@@ -11,16 +11,9 @@ Official Android SDK for **ORYKSA AI Employees**. Put an AI employee that alread
 **Read in:** English (this page), or open your language:
 
 <details>
-<summary><b>Português (Portugal)</b></summary>
+<summary><b>Português</b></summary>
 
 SDK oficial Android da **ORYKSA AI Employees**: põe na tua app um colaborador de IA que já conhece o teu negócio, com um chat pronto (Jetpack Compose ou atividade pronta) igual ao chat do site da ORYKSA, com o nome e a foto da tua IA. O teu servidor cria o token de sessão (`POST /v1/sessions`) e a app usa `OryksaClient(getToken = ...)` com `OryksaChatActivity.open(context, "pt")`. Cada resposta da IA conta como uma interação do teu plano.
-
-</details>
-
-<details>
-<summary><b>Português (Brasil)</b></summary>
-
-SDK oficial Android da **ORYKSA AI Employees**: coloque no seu app um colaborador de IA que já conhece o seu negócio, com um chat pronto (Jetpack Compose ou atividade pronta) igual ao chat do site da ORYKSA, com o nome e a foto da sua IA. Seu servidor cria o token de sessão (`POST /v1/sessions`) e o app usa `OryksaClient(getToken = ...)` com `OryksaChatActivity.open(context, "br")`. Cada resposta da IA conta como uma interação do seu plano.
 
 </details>
 
