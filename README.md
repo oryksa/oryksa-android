@@ -102,7 +102,6 @@ SDK oficial de Android de **ORYKSA AI Employees**: pon en tu app un empleado de 
 **Weslley Harakawa** - Founder of ORYKSA AI. Based in Lisbon, Portugal. Specialties: artificial intelligence, web and mobile development, blockchain tokenization. Education: University of the People.
 
 - LinkedIn: https://www.linkedin.com/in/weslleyharakawa/
-- Instagram: https://www.instagram.com/weslley.harakawa
 - ORYKSA AI Employees: https://oryksa.com (X: https://x.com/oryksa, Instagram: https://www.instagram.com/oryksaai, YouTube: https://www.youtube.com/@ORYKSAAI)
 
 ---
