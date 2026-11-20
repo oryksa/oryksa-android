@@ -14,7 +14,7 @@ SDK Android officiel d'**ORYKSA AI Employees**. Mettez dans votre app Android un
 
 <p align="center"><img src="docs/screenshots/android_product_en.png" width="190" alt="Product page with the chat button"> <img src="docs/screenshots/android_chat_en.png" width="190" alt="Chat"> <img src="docs/screenshots/android_theme_en.png" width="190" alt="Chat with the README theme"> <img src="docs/screenshots/android_voice_en.png" width="190" alt="Voice"></p>
 
-Écrans réels de l'app d'exemple de ce dépôt, capturés par la CI sur un simulateur avec un compte de test ORYKSA. Le chat vert utilise le code de *Couleurs et thème*, plus bas.
+Écrans réels de l'app d'exemple de ce dépôt, capturés par la CI sur un émulateur avec un compte de test ORYKSA. Le chat vert utilise le code de *Couleurs et thème*, plus bas.
 
 ## Installer
 
