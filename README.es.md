@@ -10,6 +10,12 @@ SDK oficial de Android de **ORYKSA AI Employees**. Pon dentro de tu app Android 
 * API: `https://api.oryksa.com/v1`
 * Android 6.0 o superior (minSdk 23).
 
+## Capturas de pantalla
+
+<p align="center"><img src="docs/screenshots/android_product_en.png" width="190" alt="Product page with the chat button"> <img src="docs/screenshots/android_chat_en.png" width="190" alt="Chat"> <img src="docs/screenshots/android_theme_en.png" width="190" alt="Chat with the README theme"> <img src="docs/screenshots/android_voice_en.png" width="190" alt="Voice"></p>
+
+Pantallas reales de la app de ejemplo de este repositorio, capturadas por el CI en un simulador con una cuenta de prueba de ORYKSA. El chat verde usa el código de *Colores y tema*, más abajo.
+
 ## Instalar
 
 Maven Central (no hace falta ningún repositorio adicional):
