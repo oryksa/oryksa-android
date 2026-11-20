@@ -33,7 +33,7 @@ import com.oryksa.sdk.OryksaVoiceScreen
  * ORYKSA chat + voice in an Android app: a product page of your store. The chat knows the customer is
  * looking at this product (appContext). Your server creates the session token (POST /v1/sessions with
  * the secret key) and the app only gets `oryk_cs_...`.
- * Extra "screen" = product | chat | voice opens that screen directly (used by the CI screenshots).
+ * Extra "screen" = product | chat | theme | voice opens that screen directly (used by the CI screenshots).
  */
 class MainActivity : ComponentActivity() {
     private val client by lazy {
@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) { agent = runCatching { client.agent() }.getOrNull() }
             when (screen) {
                 "chat" -> OryksaChat(client, lang = lang, onClose = { screen = "product" }, appContext = { appContext() })
+                "theme" -> OryksaChat(client, lang = lang, theme = readmeTheme, onClose = { screen = "product" }, appContext = { appContext() })
                 "voice" -> agent?.let { OryksaVoiceScreen(client, it, onClose = { screen = "chat" }, lang = lang, appContext = { appContext() }) }
                 else -> Box(Modifier.fillMaxSize().background(Color(0xFFFDFAFF))) {
                     Column(Modifier.padding(20.dp)) {
