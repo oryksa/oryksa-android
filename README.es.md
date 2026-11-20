@@ -85,6 +85,19 @@ En tu servidor (por ejemplo con `@oryksa/sdk` en Node): `oryksa.learnApp({ name,
 
 Las llamadas que fallan lanzan `OryksaException` con `status`, `code` (por ejemplo `interaction_limit_reached`, `rate_limited`, `plan_required`) y `message`.
 
+## Colores y tema
+
+`OryksaChatTheme` es una data class con cinco colores: `accent` (botones, burbujas del visitante, enlaces), `ink` (texto principal), `soft` (burbujas de la IA), `background` (panel) y `muted` (texto secundario). Cada uno es un `Color` de Compose y tiene un valor por defecto, así que solo pasas los que quieres cambiar. Pasa el tema a `OryksaChat` y a `OryksaChatButton`.
+
+```kotlin
+val theme = OryksaChatTheme(accent = Color(0xFF0E8A6B))
+
+OryksaChat(client = client, theme = theme)
+OryksaChatButton(client = client, onClick = { /* open the chat */ }, theme = theme)
+```
+
+No hay tema oscuro automático: para el modo oscuro, pasa tus propios colores oscuros. `OryksaChatActivity` (apps con Views) usa los colores por defecto.
+
 ---
 
 ## Sobre el autor
