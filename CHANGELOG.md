@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2
+
+- Documentation only, no change in the SDK behaviour: README in English, Portuguese, Spanish and French with real screenshots of the example app (CI, ORYKSA test account), an animated overview of the ORYKSA SDKs and a *Colours and theme* section; the example app compiles the README theme code.
+- Install instructions point to this version. The YouTube link of the author section is now https://www.youtube.com/@ORYKSA.
+
 ## 1.1.1
 
 - Voice screen: the words the person says are never shown on screen. While the AI thinks it shows "I'm listening" / "One moment..." in the interface language; the AI's answer still shows as text. Same behaviour as the ORYKSA apps, web and extensions.

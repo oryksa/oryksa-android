@@ -14,7 +14,7 @@ SDK Android officiel d'**ORYKSA AI Employees**. Mettez dans votre app Android un
 
 ## Captures d'écran
 
-<p align="center"><img src="docs/screenshots/android_product_en.png" width="190" alt="Product page with the chat button"> <img src="docs/screenshots/android_chat_en.png" width="190" alt="Chat"> <img src="docs/screenshots/android_theme_en.png" width="190" alt="Chat with the README theme"> <img src="docs/screenshots/android_voice_en.png" width="190" alt="Voice"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/oryksa/oryksa-android/main/docs/screenshots/android_product_en.png" width="190" alt="Product page with the chat button"> <img src="https://raw.githubusercontent.com/oryksa/oryksa-android/main/docs/screenshots/android_chat_en.png" width="190" alt="Chat"> <img src="https://raw.githubusercontent.com/oryksa/oryksa-android/main/docs/screenshots/android_theme_en.png" width="190" alt="Chat with the README theme"> <img src="https://raw.githubusercontent.com/oryksa/oryksa-android/main/docs/screenshots/android_voice_en.png" width="190" alt="Voice"></p>
 
 Écrans réels de l'app d'exemple de ce dépôt, capturés par la CI sur un émulateur avec un compte de test ORYKSA. Le chat vert utilise le code de *Couleurs et thème*, plus bas.
 
@@ -24,7 +24,7 @@ Maven Central (aucun dépôt supplémentaire nécessaire) :
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.1.0")
+    implementation("com.oryksa:sdk:1.1.2")
 }
 ```
 
@@ -32,7 +32,7 @@ Autre option, JitPack (même code, directement depuis GitHub) :
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.1.0")
+implementation("com.github.oryksa:oryksa-android:1.1.2")
 ```
 
 ## À quoi il sert
