@@ -13,7 +13,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /** SDK version sent in the `X-ORYKSA-SDK` header. */
-const val ORYKSA_SDK_VERSION = "1.1.3"
+const val ORYKSA_SDK_VERSION = "1.1.4"
 
 /**
  * Error returned by the ORYKSA API. [code] is stable, for example `interaction_limit_reached`,
@@ -220,6 +220,21 @@ class OryksaClient(
     }
 
     /**
+     * An AI task of your own app, counted as ORYKSA interactions (1 per answer): read a photo, extract data,
+     * classify, translate, write. It never creates a conversation in the business's inbox and never acts on the
+     * account. Your prompt ([instructions]) and your JSON Schema ([schema]) live in your app. [images]: up to 4
+     * photos (JPEG/PNG/WebP, about 1.5 MB each; resize to 1600 px). With a schema, the answer is in `json`.
+     */
+    suspend fun ai(
+        instructions: String? = null,
+        input: String? = null,
+        images: List<OryksaImage> = emptyList(),
+        schema: JSONObject? = null,
+        maxTokens: Int? = null,
+        temperature: Double? = null,
+    ): OryksaAiResult = aiResult(request("POST", "/client/ai", aiBody(instructions, input, images, schema, maxTokens, temperature)))
+
+    /**
      * Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait].
      * [appContext]: the screen the customer is on inside your app. [voice]: the reply will be heard (it also
      * carries a short `speech`). [whisper]: the customer whispered. [voiceStats]: audio numbers of the voice turn.
@@ -328,6 +343,44 @@ class OryksaClient(
             if (image != null) body.put("image_base64", oryksaBase64(image.bytes)).put("image_mime", image.mime)
             if (file != null) body.put("file_base64", oryksaBase64(file.bytes)).put("file_name", file.name).put("file_mime", file.mime)
             return body
+        }
+
+        /** The JSON of `POST /v1/client/ai`. */
+        fun aiBody(
+            instructions: String? = null,
+            input: String? = null,
+            images: List<OryksaImage> = emptyList(),
+            schema: JSONObject? = null,
+            maxTokens: Int? = null,
+            temperature: Double? = null,
+        ): JSONObject {
+            require(!instructions.isNullOrEmpty() || !input.isNullOrEmpty() || images.isNotEmpty()) {
+                "ai() needs instructions, input or an image."
+            }
+            require(images.size <= 4) { "ai() takes at most 4 images." }
+            val body = JSONObject().put("platform", "android")
+            if (!instructions.isNullOrEmpty()) body.put("instructions", instructions)
+            if (!input.isNullOrEmpty()) body.put("input", input)
+            if (images.isNotEmpty()) {
+                val a = JSONArray()
+                images.forEach { a.put(JSONObject().put("base64", oryksaBase64(it.bytes)).put("mime", it.mime)) }
+                body.put("images", a)
+            }
+            schema?.let { body.put("schema", it) }
+            maxTokens?.let { body.put("max_tokens", it) }
+            temperature?.let { body.put("temperature", it) }
+            return body
+        }
+
+        /** Reads an `ai_result` answer. */
+        fun aiResult(j: JSONObject): OryksaAiResult {
+            val use = j.optJSONObject("oryksa") ?: JSONObject()
+            return OryksaAiResult(
+                text = j.optString("text"),
+                json = j.optJSONObject("json"),
+                interactionsSpent = use.optInt("interactions_spent", 0),
+                interactionsRemaining = if (use.has("interactions_remaining")) use.optInt("interactions_remaining") else null,
+            )
         }
     }
 }

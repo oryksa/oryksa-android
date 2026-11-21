@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.4
+
+* **The AI doing what you want in your app: `client.ai(...)`.** An AI task of your own feature, from the app, with the
+  session token (never the secret key): instructions, text, up to 4 photos and an optional JSON Schema; the answer
+  comes back as text and, with a schema, as an object in `json`. Each answer counts as 1 ORYKSA interaction. It does
+  not create a conversation in the business's inbox and never acts on the account. Server route: `POST /v1/client/ai`.
+
 ## 1.1.3
 
 - **Links you can tap, with an Open button.** The links of her replies were plain text. They can now be tapped in the chat (web and e-mail, underlined, in the accent colour on her bubbles and white on the customer's), and each web link (3 at most) gets a card under the reply with the picture and the title of the page and an **Open** button. Titles and pictures come from `OryksaClient.linkPreview` (new `GET /v1/client/link-preview`, kept in memory, never throws), only for the pages of the business's own site (its website chat domains); other links show the address.

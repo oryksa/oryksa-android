@@ -40,7 +40,7 @@ dependencies {
 mavenPublishing {
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
     if (project.hasProperty("signingInMemoryKey")) signAllPublications()
-    coordinates("com.oryksa", "sdk", "1.1.3")
+    coordinates("com.oryksa", "sdk", "1.1.4")
     pom {
         name.set("ORYKSA SDK for Android")
         description.set("Official Android SDK for ORYKSA AI Employees: in-app AI chat (Jetpack Compose) and API v1 client.")

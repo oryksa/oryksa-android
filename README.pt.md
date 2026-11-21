@@ -24,7 +24,7 @@ Maven Central (não é preciso nenhum repositório extra):
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.1.3")
+    implementation("com.oryksa:sdk:1.1.4")
 }
 ```
 
@@ -32,7 +32,7 @@ Alternativa, JitPack (o mesmo código, diretamente do GitHub):
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.1.3")
+implementation("com.github.oryksa:oryksa-android:1.1.4")
 ```
 
 ## Para que serve
@@ -84,6 +84,22 @@ OryksaChat(client, lang = "pt", attachments = false) // sem botão de anexar
 // Sem a interface:
 client.send("Aqui está o orçamento", file = OryksaFile(pdfBytes, "orcamento.pdf", "application/pdf"))
 ```
+
+## As tuas funções de IA: `ai` (1.1.4)
+
+Põe a IA a fazer o que a tua app precisa (ler uma foto, extrair dados, classificar, traduzir, escrever) e paga com interações ORYKSA: 1 por resposta. O teu prompt e o teu JSON Schema ficam na tua app; basta o token de sessão (nunca leves a chave secreta). Não cria conversa na tua caixa.
+
+```kotlin
+val r = client.ai(
+    instructions = "Read the tyre on the photo: brand, model and size exactly as written on the sidewall. " +
+        "If the size is not legible, readable=false and size=null. Never invent.",
+    images = listOf(OryksaImage(jpegBytes)), // resized to 1600 px
+    schema = JSONObject("""{"type":"object","properties":{"readable":{"type":"boolean"},"brand":{"type":["string","null"]},"size":{"type":["string","null"]}},"required":["readable","brand","size"]}"""),
+)
+if (r.json?.optBoolean("readable") == true) showProducts(r.json!!.getString("size"))
+```
+
+`r.text` tem a resposta em texto, `r.json` o objeto (com schema) e `r.interactionsSpent` as interações gastas. Quando as interações do plano acabam, a chamada lança `OryksaException` com o status 402.
 
 ## Como funciona (e porque é que a chave fica segura)
 

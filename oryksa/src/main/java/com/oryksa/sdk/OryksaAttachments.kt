@@ -18,6 +18,18 @@ class OryksaFile(
     val mime: String = "application/octet-stream",
 )
 
+/** The answer of [OryksaClient.ai]: an AI task of your own app, counted as ORYKSA interactions. */
+class OryksaAiResult(
+    /** The AI's answer as text (with a schema, the JSON text). */
+    val text: String,
+    /** The answer as an object, when you passed a JSON Schema and the answer follows it. */
+    val json: org.json.JSONObject? = null,
+    /** ORYKSA interactions this answer used (1 per answer). */
+    val interactionsSpent: Int = 0,
+    /** ORYKSA interactions left in this period, when known. */
+    val interactionsRemaining: Int? = null,
+)
+
 /** The largest photo the chat sends (after it is made smaller): 2 MB. */
 const val ORYKSA_MAX_PHOTO_BYTES = 2 * 1024 * 1024
 
