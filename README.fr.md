@@ -24,7 +24,7 @@ Maven Central (aucun dépôt supplémentaire nécessaire) :
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.1.2")
+    implementation("com.oryksa:sdk:1.1.3")
 }
 ```
 
@@ -32,7 +32,7 @@ Autre option, JitPack (même code, directement depuis GitHub) :
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.1.2")
+implementation("com.github.oryksa:oryksa-android:1.1.3")
 ```
 
 ## À quoi il sert
@@ -51,6 +51,23 @@ Autorisation du micro : le manifeste du SDK déclare `RECORD_AUDIO` ; l'écran v
 OryksaChat(client, lang = "pt",
     appContext = { OryksaAppContext(screen = "product", title = "Sky Beginner Snowboard, 489.95") })
 ```
+
+## Liens avec un bouton pour les ouvrir (1.1.3)
+
+Les liens que donne l'IA se touchent dans le chat (adresses web et e-mails), et chaque lien web a une carte sous sa réponse avec la photo et le titre de la page et un bouton pour l'ouvrir (les pages de votre propre site, les domaines de votre chat web ; les autres sites montrent l'adresse). L'écran vocal montre ce qu'elle dit sans les adresses, avec les mêmes cartes ; toucher le bouton ferme l'écran vocal. Passez `onLink` pour ouvrir vos propres écrans, par exemple la page du produit : renvoyez true quand votre app l'a ouvert, false pour laisser le navigateur l'ouvrir.
+
+```kotlin
+OryksaChat(client, lang = "en", onLink = { uri ->
+    val id = myProductIdOf(uri) ?: return@OryksaChat false // vos routes
+    navController.navigate("product/$id")
+    true
+})
+
+// Apps avec Views : le chat en plein écran
+OryksaChatActivity.onLink = { uri -> openMyProduct(uri) }
+```
+
+`onLink` existe aussi sur les deux fonctions `OryksaVoiceScreen`.
 
 ## Comment ça marche (et pourquoi la clé reste en sécurité)
 

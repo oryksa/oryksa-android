@@ -24,7 +24,7 @@ Maven Central (no extra repository needed):
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.1.2")
+    implementation("com.oryksa:sdk:1.1.3")
 }
 ```
 
@@ -32,7 +32,7 @@ Alternative, JitPack (same code, straight from GitHub):
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.1.2")
+implementation("com.github.oryksa:oryksa-android:1.1.3")
 ```
 
 ## What it is for
@@ -51,6 +51,23 @@ Microphone permission: the SDK manifest declares `RECORD_AUDIO`; the voice scree
 OryksaChat(client, lang = "pt",
     appContext = { OryksaAppContext(screen = "product", title = "Sky Beginner Snowboard, 489.95") })
 ```
+
+## Links with an Open button (1.1.3)
+
+The links the AI gives can be tapped in the chat (web addresses and e-mails), and each web link gets a card under her reply with the picture and title of the page and an **Open** button (the pages of your own site, the domains of your website chat; other sites show the address). The voice screen shows what she says without the addresses, with the same cards; tapping Open closes the voice screen. Pass `onLink` to open your own screens, for example your product page: return true when your app opened it, false to let the browser open it.
+
+```kotlin
+OryksaChat(client, lang = "en", onLink = { uri ->
+    val id = myProductIdOf(uri) ?: return@OryksaChat false // your routes
+    navController.navigate("product/$id")
+    true
+})
+
+// Apps with Views: the full screen chat
+OryksaChatActivity.onLink = { uri -> openMyProduct(uri) }
+```
+
+`onLink` is also on both `OryksaVoiceScreen` functions.
 
 ## How it works (and why the key stays safe)
 

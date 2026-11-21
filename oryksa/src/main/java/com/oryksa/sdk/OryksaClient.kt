@@ -1,5 +1,6 @@
 package com.oryksa.sdk
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -8,9 +9,11 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 
 /** SDK version sent in the `X-ORYKSA-SDK` header. */
-const val ORYKSA_SDK_VERSION = "1.1.2"
+const val ORYKSA_SDK_VERSION = "1.1.3"
 
 /**
  * Error returned by the ORYKSA API. [code] is stable, for example `interaction_limit_reached`,
@@ -82,6 +85,28 @@ data class OryksaReply(
     val speech: String? = null,
     val whisper: Boolean = false,
 )
+
+/** Title and picture of a link of the business's own site ([OryksaClient.linkPreview]). */
+data class OryksaLinkPreview(
+    /** The link. */
+    val url: String,
+    /** Title of the page (empty for other sites). */
+    val title: String = "",
+    /** Picture of the page (empty when it has none). */
+    val image: String = "",
+    /** Name of the site. */
+    val site: String = "",
+    /** Price, when the page says it (shops). */
+    val price: String = "",
+) {
+    companion object {
+        /** Reads a `link_preview` object. */
+        fun fromJson(j: JSONObject): OryksaLinkPreview {
+            fun s(k: String) = if (j.isNull(k)) "" else j.optString(k)
+            return OryksaLinkPreview(s("url"), s("title"), s("image"), s("site"), s("price"))
+        }
+    }
+}
 
 /** Where the customer is inside your app. Sent with each message so the AI answers about the current screen. */
 data class OryksaAppContext(
@@ -172,6 +197,27 @@ class OryksaClient(
 
     /** Name, photo, greeting and suggestions of the AI employee. */
     suspend fun agent(): OryksaAgent = OryksaAgent.fromJson(request("GET", "/client/agent"))
+
+    private val previews = ConcurrentHashMap<String, OryksaLinkPreview>()
+
+    /**
+     * Title and picture of a link the AI gave, for the card under her reply. Only the pages of the
+     * business's own site (its website chat domains) get a title and a picture. Null when it cannot be
+     * read; never throws. Kept in memory for this client.
+     */
+    suspend fun linkPreview(url: String): OryksaLinkPreview? {
+        previews[url]?.let { return it }
+        return try {
+            val p = OryksaLinkPreview.fromJson(request("GET", "/client/link-preview?url=" + URLEncoder.encode(url, "UTF-8")))
+            if (previews.size > 200) previews.clear()
+            previews[url] = p
+            p
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     /**
      * Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait].

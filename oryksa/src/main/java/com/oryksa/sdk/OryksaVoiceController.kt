@@ -60,6 +60,8 @@ class OryksaVoiceController(
     val phase: StateFlow<OryksaVoicePhase> = _phase
     /** Last thing the AI said. */
     val lastReply = MutableStateFlow("")
+    /** What she said out loud last (the short spoken version of [lastReply]). */
+    val lastSpoken = MutableStateFlow("")
     /** Last thing the customer said. */
     val lastHeard = MutableStateFlow("")
 
@@ -253,14 +255,21 @@ class OryksaVoiceController(
             if (closed || my != turn) return@launch
             val reply = r?.reply?.trim().orEmpty()
             if (reply.isEmpty()) { busy = false; set(OryksaVoicePhase.NOT_UNDERSTOOD); return@launch }
+            val said = r?.speech?.trim()?.takeIf { it.isNotEmpty() } ?: reply
             lastReply.value = reply
+            lastSpoken.value = said
             onReply?.invoke(reply)
-            speak(r?.speech?.trim()?.takeIf { it.isNotEmpty() } ?: reply, my)
+            speak(said, my)
         }
     }
 
     /** Speaks [text] with the AI's voice (for example a greeting). If the voice fails she stays silent. */
-    fun say(text: String) { val my = ++turn; scope.launch { speak(text, my) } }
+    fun say(text: String) {
+        lastReply.value = text
+        lastSpoken.value = text
+        val my = ++turn
+        scope.launch { speak(text, my) }
+    }
 
     private suspend fun speak(text: String, my: Int) {
         beforeCut.clear()

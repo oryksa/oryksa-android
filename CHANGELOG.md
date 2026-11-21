@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3
+
+- **Links you can tap, with an Open button.** The links of her replies were plain text. They can now be tapped in the chat (web and e-mail, underlined, in the accent colour on her bubbles and white on the customer's), and each web link (3 at most) gets a card under the reply with the picture and the title of the page and an **Open** button. Titles and pictures come from `OryksaClient.linkPreview` (new `GET /v1/client/link-preview`, kept in memory, never throws), only for the pages of the business's own site (its website chat domains); other links show the address.
+- `onLink: (Uri) -> Boolean` on `OryksaChat`, `OryksaChatActivity.onLink` and both `OryksaVoiceScreen` functions lets your app open its own screens (return true) instead of the browser (`Intent.ACTION_VIEW`).
+- **The voice screen shows what she says**, the short spoken version, without the addresses (7 lines at most), with the same cards under it; tapping Open closes the voice screen, then opens the link. `OryksaVoiceController.lastSpoken`; `say()` now also sets `lastReply` and `lastSpoken`.
+- New public helpers: `oryksaLinksIn`, `oryksaWithoutLinks`, `oryksaRichText`, `oryksaOpenLink`, `OryksaLinkCard`, `OryksaLinkPreview`.
+
 ## 1.1.2
 
 - Documentation only, no change in the SDK behaviour: README in English, Portuguese, Spanish and French with real screenshots of the example app (CI, ORYKSA test account), an animated overview of the ORYKSA SDKs and a *Colours and theme* section; the example app compiles the README theme code.

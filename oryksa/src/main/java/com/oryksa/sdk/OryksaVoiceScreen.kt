@@ -42,6 +42,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,31 +53,33 @@ internal val oryksaVoiceTexts = mapOf(
         "micError" to "Microphone unavailable", "micErrorSub" to "Allow microphone access, or close other apps using it.",
         "noisy" to "Too much background noise", "noisySub" to "I cannot tell your voice from the noise. Move somewhere quieter, or type to me.",
         "notUnderstood" to "I could not understand", "notUnderstoodSub" to "Say it again, please.",
-        "tapToSend" to "Tap the picture to send what you said.", "mute" to "Mute", "unmute" to "Unmute", "close" to "Close"),
+        "tapToSend" to "Tap the picture to send what you said.", "mute" to "Mute", "unmute" to "Unmute", "close" to "Close", "open" to "Open"),
     "pt" to mapOf("listening" to "Estou a ouvir", "listeningSub" to "Fala comigo. Podes interromper-me quando quiseres.", "hearing" to "Continua, estou a ouvir.",
         "thinking" to "Um momento...", "muted" to "Em pausa", "mutedSub" to "Toca no microfone para voltar a falar.",
         "micError" to "Microfone indisponível", "micErrorSub" to "Permite o acesso ao microfone, ou fecha outras apps que o estejam a usar.",
         "noisy" to "Demasiado barulho", "noisySub" to "Não consigo distinguir a tua voz do barulho. Vai para um sítio mais calmo, ou escreve-me.",
         "notUnderstood" to "Não percebi", "notUnderstoodSub" to "Diz outra vez, por favor.",
-        "tapToSend" to "Toca na imagem para enviar o que disseste.", "mute" to "Silenciar", "unmute" to "Ativar som", "close" to "Fechar"),
+        "tapToSend" to "Toca na imagem para enviar o que disseste.", "mute" to "Silenciar", "unmute" to "Ativar som", "close" to "Fechar", "open" to "Abrir"),
     "br" to mapOf("listening" to "Estou ouvindo", "listeningSub" to "Fale comigo. Você pode me interromper quando quiser.", "hearing" to "Continue, estou ouvindo.",
         "thinking" to "Um momento...", "muted" to "Em pausa", "mutedSub" to "Toque no microfone para voltar a falar.",
         "micError" to "Microfone indisponível", "micErrorSub" to "Permita o acesso ao microfone, ou feche outros apps que estejam usando.",
         "noisy" to "Barulho demais", "noisySub" to "Não consigo separar sua voz do barulho. Vá para um lugar mais calmo, ou digite para mim.",
         "notUnderstood" to "Não entendi", "notUnderstoodSub" to "Fale de novo, por favor.",
-        "tapToSend" to "Toque na imagem para enviar o que você disse.", "mute" to "Silenciar", "unmute" to "Ativar som", "close" to "Fechar"),
+        "tapToSend" to "Toque na imagem para enviar o que você disse.", "mute" to "Silenciar", "unmute" to "Ativar som", "close" to "Fechar", "open" to "Abrir"),
     "es" to mapOf("listening" to "Te escucho", "listeningSub" to "Háblame. Puedes interrumpirme cuando quieras.", "hearing" to "Sigue, te escucho.",
         "thinking" to "Un momento...", "muted" to "En pausa", "mutedSub" to "Toca el micrófono para volver a hablar.",
         "micError" to "Micrófono no disponible", "micErrorSub" to "Permite el acceso al micrófono, o cierra otras apps que lo estén usando.",
         "noisy" to "Demasiado ruido", "noisySub" to "No distingo tu voz del ruido. Ve a un sitio más tranquilo, o escríbeme.",
         "notUnderstood" to "No te entendí", "notUnderstoodSub" to "Dilo otra vez, por favor.",
-        "tapToSend" to "Toca la imagen para enviar lo que dijiste.", "mute" to "Silenciar", "unmute" to "Activar sonido", "close" to "Cerrar"),
+        "tapToSend" to "Toca la imagen para enviar lo que dijiste.", "mute" to "Silenciar", "unmute" to "Activar sonido", "close" to "Cerrar", "open" to "Abrir"),
 )
 
 /**
  * Full-screen voice conversation, the same as the ORYKSA app: the photo of the AI with a halo,
  * "I'm listening" / her answer, Mute and Close. Asks for the microphone permission, starts listening
  * when it appears and closes the microphone when it goes.
+ * [onLink]: what your app does with a link the AI gave (see [OryksaLinkHandler]). The links of her
+ * answer show as cards with an Open button; tapping one closes the voice screen.
  */
 @Composable
 fun OryksaVoiceScreen(
@@ -85,10 +88,12 @@ fun OryksaVoiceScreen(
     onClose: () -> Unit,
     lang: String = "en",
     theme: OryksaChatTheme = OryksaChatTheme(),
+    onLink: OryksaLinkHandler? = null,
 ) {
     val t = oryksaVoiceTexts[lang] ?: oryksaVoiceTexts.getValue("en")
     val phase by controller.phase.collectAsState()
     val reply by controller.lastReply.collectAsState()
+    val spoken by controller.lastSpoken.collectAsState()
     val ctx = LocalContext.current
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { controller.start() }
     LaunchedEffect(controller) {
@@ -102,7 +107,8 @@ fun OryksaVoiceScreen(
         OryksaVoicePhase.HEARING -> t.getValue("listening") to t.getValue("hearing")
         // never the words the person said on screen: only "listening" in the interface language; her answer shows as text
         OryksaVoicePhase.THINKING -> t.getValue("listening") to t.getValue("thinking")
-        OryksaVoicePhase.SPEAKING -> agent.name to reply
+        // What she says out loud, without the addresses: the links are the cards below (owner 2026-11-21).
+        OryksaVoicePhase.SPEAKING -> agent.name to oryksaWithoutLinks(spoken.ifEmpty { reply })
         OryksaVoicePhase.MUTED -> t.getValue("muted") to t.getValue("mutedSub")
         OryksaVoicePhase.MIC_ERROR -> t.getValue("micError") to t.getValue("micErrorSub")
         OryksaVoicePhase.NOISY -> t.getValue("noisy") to t.getValue("noisySub")
@@ -136,7 +142,10 @@ fun OryksaVoiceScreen(
         Text(title, color = theme.ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 14.dp, start = 30.dp, end = 30.dp))
         Text(sub, color = theme.muted, fontSize = 13.5.sp, lineHeight = 20.sp, textAlign = TextAlign.Center,
+            maxLines = 7, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 8.dp, start = 30.dp, end = 30.dp))
+        OryksaLinkCards(reply, controller.client, t.getValue("open"), theme, onLink,
+            Modifier.padding(top = 10.dp, start = 30.dp, end = 30.dp)) { controller.close(); onClose() }
         if (phase == OryksaVoicePhase.HEARING) {
             Text(t.getValue("tapToSend"), color = Color(0xFFAAB0CC), fontSize = 11.5.sp, modifier = Modifier.padding(top = 10.dp))
         }
@@ -190,7 +199,10 @@ internal fun MicGlyph(color: Color, size: Int = 22, crossed: Boolean = false) {
     }
 }
 
-/** The voice screen with its own controller, kept while the screen is shown. */
+/**
+ * The voice screen with its own controller, kept while the screen is shown.
+ * [onLink]: what your app does with a link the AI gave (see [OryksaLinkHandler]).
+ */
 @Composable
 fun OryksaVoiceScreen(
     client: OryksaClient,
@@ -199,10 +211,11 @@ fun OryksaVoiceScreen(
     lang: String = "en",
     theme: OryksaChatTheme = OryksaChatTheme(),
     appContext: (() -> OryksaAppContext?)? = null,
+    onLink: OryksaLinkHandler? = null,
     onUserText: ((String) -> Unit)? = null,
     onReply: ((String) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val controller = remember(client) { OryksaVoiceController(ctx, client, appContext, onUserText, onReply) }
-    OryksaVoiceScreen(controller, agent, onClose, lang, theme)
+    OryksaVoiceScreen(controller, agent, onClose, lang, theme, onLink)
 }

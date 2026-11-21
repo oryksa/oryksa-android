@@ -3,6 +3,7 @@ package com.oryksa.sdk
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -62,6 +63,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -93,10 +95,10 @@ data class OryksaChatTheme(
 )
 
 internal val oryksaTexts = mapOf(
-    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice", "copy" to "Copy"),
-    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz", "copy" to "Copiar"),
-    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz", "copy" to "Copiar"),
-    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz", "copy" to "Copiar"),
+    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice", "copy" to "Copy", "open" to "Open"),
+    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir"),
+    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir"),
+    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz", "copy" to "Copiar", "open" to "Abrir"),
 )
 
 internal fun oryksaLang(l: String) = if (oryksaTexts.containsKey(l)) l else "en"
@@ -160,6 +162,8 @@ internal fun oryksaBold(text: String) = buildAnnotatedString {
  * The ORYKSA chat panel: header with the photo and name of the AI, messages, suggestions, input and
  * (when the plan has voice) the microphone that opens the voice conversation.
  * [appContext]: where the customer is in your app right now, sent with each message.
+ * [onLink]: what your app does with a link the AI gave (see [OryksaLinkHandler]). Null: the browser or
+ * the app that owns the address opens it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -171,7 +175,9 @@ fun OryksaChat(
     onClose: (() -> Unit)? = null,
     appContext: (() -> OryksaAppContext?)? = null,
     voice: Boolean = true,
+    onLink: OryksaLinkHandler? = null,
 ) {
+    val context = LocalContext.current
     val lg = oryksaLang(lang)
     val tx = oryksaTexts.getValue(lg)
     val scope = rememberCoroutineScope()
@@ -223,7 +229,7 @@ fun OryksaChat(
     val voiceAgent = agent
     if (voiceOpen && voiceAgent != null) {
         OryksaVoiceScreen(client = client, agent = voiceAgent, onClose = { voiceOpen = false }, lang = lg, theme = theme,
-            appContext = appContext,
+            appContext = appContext, onLink = onLink,
             onUserText = { sug = emptyList(); msgs.add(ChatMsg(System.nanoTime(), "user", it)) },
             onReply = { msgs.add(ChatMsg(System.nanoTime(), "assistant", it)) })
         return
@@ -256,11 +262,19 @@ fun OryksaChat(
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                             .alpha(if (m.role == "typing") 0.6f else 1f)
                     ) {
-                        SelectionContainer { Text(oryksaBold(if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text), color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
+                        val shown = if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text
+                        val rich = remember(shown, mine, theme.accent, onLink) {
+                            oryksaRichText(shown, if (mine) Color.White else theme.accent) { oryksaOpenLink(context, Uri.parse(it), onLink) }
+                        }
+                        SelectionContainer { Text(rich, color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
                     }
                 }
-                // Copy button under each reply of the AI (same as the ORYKSA apps and extension).
-                if (!mine && m.role != "typing" && m.text.isNotBlank()) CopyButton(m.text.replace("**", ""), tx.getValue("copy"), theme.muted)
+                // A card with an Open button for each link of the reply (owner 2026-11-21: the links were plain text),
+                // then the copy button (same as the ORYKSA apps and extension).
+                if (!mine && m.role != "typing" && m.text.isNotBlank()) {
+                    OryksaLinkCards(m.text, client, tx.getValue("open"), theme, onLink, Modifier.widthIn(max = 300.dp).padding(top = 6.dp))
+                    CopyButton(m.text.replace("**", ""), tx.getValue("copy"), theme.muted)
+                }
               }
             }
         }
@@ -346,6 +360,9 @@ class OryksaChatActivity : ComponentActivity() {
         /** Where the customer is in your app when the chat opens (sent with each message). */
         @JvmStatic var appContext: OryksaAppContext? = null
 
+        /** What your app does with a link the AI gave (see [OryksaLinkHandler]). Null: the browser opens it. */
+        @JvmStatic var onLink: OryksaLinkHandler? = null
+
         /** Opens the chat. */
         @JvmStatic @JvmOverloads
         fun open(context: Context, lang: String = "en") {
@@ -358,6 +375,6 @@ class OryksaChatActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val c = client ?: run { finish(); return }
         val lang = intent.getStringExtra("lang") ?: "en"
-        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }, appContext = { appContext }) }
+        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }, appContext = { appContext }, onLink = onLink) }
     }
 }
