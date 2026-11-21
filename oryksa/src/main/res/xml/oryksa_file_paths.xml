@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Where the camera of the attach button saves the photo before the SDK sends it. -->
+<paths>
+    <cache-path name="oryksa_camera" path="oryksa_camera/" />
+</paths>

@@ -69,6 +69,22 @@ OryksaChatActivity.onLink = { uri -> openMyProduct(uri) }
 
 `onLink` também existe nas duas funções `OryksaVoiceScreen`.
 
+## Anexar uma foto ou um documento (1.1.3)
+
+O chat tem um botão de anexar (um clipe, ligado por omissão): uma foto do seletor de fotos, uma foto da câmara ou um documento (PDF, Word, texto, CSV, até 8 MB). A IA vê a foto (reduzida a 1600 píxeis, JPEG, até 2 MB) e lê o documento; o balão do cliente mostra a foto, ou o ícone do documento e o nome. `attachments = false` esconde o botão (`OryksaChatActivity.attachments = false` para o chat em ecrã inteiro).
+
+Permissões:
+
+* Galeria: nenhuma. O SDK usa o seletor de fotos do Android (`PickVisualMedia`).
+* Câmara: nenhuma na maioria das apps. O SDK abre a app da câmara (`TakePicture`), que não precisa da permissão `CAMERA`, e o SDK não a declara. Se a tua app declarar `android.permission.CAMERA` no seu próprio manifest, o Android exige que esteja concedida, por isso o SDK pede-a antes de abrir a câmara. O manifest do SDK junta o seu próprio FileProvider (`${applicationId}.oryksa.fileprovider`) para a foto da câmara.
+* Documentos: nenhuma. Abrem no seletor de documentos do sistema (`OpenDocument`).
+
+```kotlin
+OryksaChat(client, lang = "pt", attachments = false) // sem botão de anexar
+// Sem a interface:
+client.send("Aqui está o orçamento", file = OryksaFile(pdfBytes, "orcamento.pdf", "application/pdf"))
+```
+
 ## Como funciona (e porque é que a chave fica segura)
 
 1. O teu **servidor** guarda a chave secreta da API (`oryk_live_...`, criada em developer.oryksa.com) e cria um **token de sessão** de curta duração para cada utilizador com sessão iniciada, com `POST /v1/sessions`.

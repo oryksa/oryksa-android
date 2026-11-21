@@ -69,6 +69,22 @@ OryksaChatActivity.onLink = { uri -> openMyProduct(uri) }
 
 `onLink` existe aussi sur les deux fonctions `OryksaVoiceScreen`.
 
+## Joindre une photo ou un document (1.1.3)
+
+Le chat a un bouton pour joindre (un trombone, activé par défaut) : une photo du sélecteur de photos, une photo de l'appareil photo ou un document (PDF, Word, texte, CSV, jusqu'à 8 Mo). L'IA regarde la photo (réduite à 1600 pixels, JPEG, jusqu'à 2 Mo) et lit le document ; la bulle du client montre la photo, ou l'icône du document et son nom. `attachments = false` masque le bouton (`OryksaChatActivity.attachments = false` pour le chat en plein écran).
+
+Autorisations :
+
+* Galerie : aucune. Le SDK utilise le sélecteur de photos d'Android (`PickVisualMedia`).
+* Appareil photo : aucune dans la plupart des apps. Le SDK ouvre l'app de l'appareil photo (`TakePicture`), qui n'a pas besoin de l'autorisation `CAMERA`, et le SDK ne la déclare pas. Si votre app déclare `android.permission.CAMERA` dans son propre manifest, Android exige qu'elle soit accordée, donc le SDK la demande avant d'ouvrir l'appareil photo. Le manifest du SDK ajoute son propre FileProvider (`${applicationId}.oryksa.fileprovider`) pour la photo.
+* Documents : aucune. Ils s'ouvrent dans le sélecteur de documents du système (`OpenDocument`).
+
+```kotlin
+OryksaChat(client, lang = "en", attachments = false) // sans bouton pour joindre
+// Sans l'interface :
+client.send("Voici le devis", file = OryksaFile(pdfBytes, "devis.pdf", "application/pdf"))
+```
+
 ## Comment ça marche (et pourquoi la clé reste en sécurité)
 
 1. Votre **serveur** garde la clé API secrète (`oryk_live_...`, créée sur developer.oryksa.com) et crée un **jeton de session** de courte durée pour chaque utilisateur connecté avec `POST /v1/sessions`.

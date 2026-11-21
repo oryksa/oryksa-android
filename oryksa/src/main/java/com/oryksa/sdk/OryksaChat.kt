@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -36,6 +37,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -95,10 +98,10 @@ data class OryksaChatTheme(
 )
 
 internal val oryksaTexts = mapOf(
-    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice", "copy" to "Copy", "open" to "Open"),
-    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir"),
-    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir"),
-    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz", "copy" to "Copiar", "open" to "Abrir"),
+    "en" to mapOf("talk" to "Talk to", "ph" to "Type your question", "send" to "Send", "err" to "Sorry, something went wrong. Try again.", "voice" to "Talk by voice", "copy" to "Copy", "open" to "Open", "attach" to "Attach", "gallery" to "Photo library", "camera" to "Camera", "document" to "Document", "big" to "The file is too large (max 8 MB).", "attachErr" to "Could not attach the file."),
+    "pt" to mapOf("talk" to "Falar com", "ph" to "Escreve a tua pergunta", "send" to "Enviar", "err" to "Desculpa, algo correu mal. Tenta de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir", "attach" to "Anexar", "gallery" to "Foto da galeria", "camera" to "Câmara", "document" to "Documento", "big" to "O ficheiro é demasiado grande (máx. 8 MB).", "attachErr" to "Não foi possível anexar o ficheiro."),
+    "br" to mapOf("talk" to "Falar com", "ph" to "Digite sua pergunta", "send" to "Enviar", "err" to "Desculpe, algo deu errado. Tente de novo.", "voice" to "Falar por voz", "copy" to "Copiar", "open" to "Abrir", "attach" to "Anexar", "gallery" to "Foto da galeria", "camera" to "Câmera", "document" to "Documento", "big" to "O arquivo é grande demais (máx. 8 MB).", "attachErr" to "Não foi possível anexar o arquivo."),
+    "es" to mapOf("talk" to "Hablar con", "ph" to "Escribe tu pregunta", "send" to "Enviar", "err" to "Lo siento, algo salió mal. Inténtalo de nuevo.", "voice" to "Hablar por voz", "copy" to "Copiar", "open" to "Abrir", "attach" to "Adjuntar", "gallery" to "Foto de la galería", "camera" to "Cámara", "document" to "Documento", "big" to "El archivo es demasiado grande (máx. 8 MB).", "attachErr" to "No se pudo adjuntar el archivo."),
 )
 
 internal fun oryksaLang(l: String) = if (oryksaTexts.containsKey(l)) l else "en"
@@ -130,7 +133,8 @@ private fun CopyButton(text: String, label: String, color: Color) {
     }
 }
 
-private data class ChatMsg(val id: Long, val role: String, val text: String)
+/** [image]: the photo the customer sent (thumbnail in the bubble); [fileName]: the document the customer sent. */
+private data class ChatMsg(val id: Long, val role: String, val text: String, val image: ImageBitmap? = null, val fileName: String? = null)
 
 @Composable
 internal fun OryksaAvatarImage(url: String?, size: Int) = Avatar(url, size)
@@ -164,6 +168,7 @@ internal fun oryksaBold(text: String) = buildAnnotatedString {
  * [appContext]: where the customer is in your app right now, sent with each message.
  * [onLink]: what your app does with a link the AI gave (see [OryksaLinkHandler]). Null: the browser or
  * the app that owns the address opens it.
+ * [attachments]: shows the attach button (photo picker, camera, document); false hides it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -176,6 +181,7 @@ fun OryksaChat(
     appContext: (() -> OryksaAppContext?)? = null,
     voice: Boolean = true,
     onLink: OryksaLinkHandler? = null,
+    attachments: Boolean = true,
 ) {
     val context = LocalContext.current
     val lg = oryksaLang(lang)
@@ -212,19 +218,35 @@ fun OryksaChat(
     }
     LaunchedEffect(msgs.size) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size - 1) }
 
-    fun send(q0: String) {
+    fun send(q0: String, image: OryksaImage? = null, file: OryksaFile? = null) {
         val q = q0.trim()
-        if (q.isEmpty() || busy) return
+        if ((q.isEmpty() && image == null && file == null) || busy) return
         busy = true; sug = emptyList(); input = ""
         val id = System.nanoTime()
-        msgs.add(ChatMsg(id, "user", q)); msgs.add(ChatMsg(id + 1, "typing", "..."))
+        val thumb = image?.let { runCatching { BitmapFactory.decodeByteArray(it.bytes, 0, it.bytes.size)?.asImageBitmap() }.getOrNull() }
+        msgs.add(ChatMsg(id, "user", q, thumb, file?.name)); msgs.add(ChatMsg(id + 1, "typing", "..."))
         scope.launch {
-            val reply = runCatching { client.sendAndWait(q, appContext = appContext?.invoke()) }.getOrNull()
+            val reply = runCatching { client.sendAndWait(q, appContext = appContext?.invoke(), image = image, file = file) }.getOrNull()
             msgs.removeAll { it.role == "typing" }
             msgs.add(ChatMsg(id + 2, "assistant", reply ?: tx.getValue("err")))
             busy = false
         }
     }
+
+    // The attach button: a photo, the camera or a document; a note when it is too large or cannot be read.
+    val note = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val attach = rememberOryksaAttach { picked ->
+        when (picked) {
+            OryksaPicked.Cancelled -> Unit
+            OryksaPicked.Failed -> note(tx.getValue("attachErr"))
+            is OryksaPicked.Picked -> when (val a = picked.attachment) {
+                OryksaAttachment.TooBig -> note(tx.getValue("big"))
+                is OryksaAttachment.Image -> send(input, image = a.image)
+                is OryksaAttachment.File -> send(input, file = a.file)
+            }
+        }
+    }
+    var attachMenu by remember { mutableStateOf(false) }
 
     val voiceAgent = agent
     if (voiceOpen && voiceAgent != null) {
@@ -262,11 +284,29 @@ fun OryksaChat(
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                             .alpha(if (m.role == "typing") 0.6f else 1f)
                     ) {
-                        val shown = if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text
-                        val rich = remember(shown, mine, theme.accent, onLink) {
-                            oryksaRichText(shown, if (mine) Color.White else theme.accent) { oryksaOpenLink(context, Uri.parse(it), onLink) }
+                      Column {
+                        m.image?.let {
+                            Image(it, contentDescription = tx.getValue("gallery"), contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(200.dp, 160.dp).clip(RoundedCornerShape(12.dp)))
+                            if (m.text.isNotEmpty() || m.fileName != null) Spacer(Modifier.height(8.dp))
                         }
-                        SelectionContainer { Text(rich, color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
+                        m.fileName?.let {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                DocumentGlyph(if (mine) Color.White else theme.accent)
+                                Spacer(Modifier.size(6.dp))
+                                Text(it, color = if (mine) Color.White else theme.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (m.text.isNotEmpty()) Spacer(Modifier.height(8.dp))
+                        }
+                        if (m.text.isNotEmpty() || (m.image == null && m.fileName == null)) {
+                            val shown = if (mine) (if (profReady >= 0) OryksaProfanity.mask(m.text, lg) else m.text) else m.text
+                            val rich = remember(shown, mine, theme.accent, onLink) {
+                                oryksaRichText(shown, if (mine) Color.White else theme.accent) { oryksaOpenLink(context, Uri.parse(it), onLink) }
+                            }
+                            SelectionContainer { Text(rich, color = if (mine) Color.White else theme.ink, fontSize = 14.sp, lineHeight = 21.sp) }
+                        }
+                      }
                     }
                 }
                 // A card with an Open button for each link of the reply (owner 2026-11-21: the links were plain text),
@@ -303,6 +343,21 @@ fun OryksaChat(
                     focusedTextColor = theme.ink, unfocusedTextColor = theme.ink,
                 ),
             )
+            if (attachments) {
+                Box {
+                    Box(Modifier.fillMaxHeight().clickable(enabled = !busy) { attachMenu = true }.padding(horizontal = 10.dp)
+                        .semantics { contentDescription = tx.getValue("attach") }, contentAlignment = Alignment.Center) {
+                        PaperclipGlyph(theme.accent)
+                    }
+                    DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                        DropdownMenuItem(text = { Text(tx.getValue("gallery"), color = theme.ink) }, onClick = { attachMenu = false; attach.gallery() })
+                        attach.camera?.let { cam ->
+                            DropdownMenuItem(text = { Text(tx.getValue("camera"), color = theme.ink) }, onClick = { attachMenu = false; cam() })
+                        }
+                        DropdownMenuItem(text = { Text(tx.getValue("document"), color = theme.ink) }, onClick = { attachMenu = false; attach.document() })
+                    }
+                }
+            }
             if (voice && agent?.voiceReplies == true && input.isBlank()) {
                 Box(Modifier.fillMaxHeight().clickable(enabled = !busy) { voiceOpen = true }.padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center) { MicGlyph(theme.accent) }
@@ -363,6 +418,9 @@ class OryksaChatActivity : ComponentActivity() {
         /** What your app does with a link the AI gave (see [OryksaLinkHandler]). Null: the browser opens it. */
         @JvmStatic var onLink: OryksaLinkHandler? = null
 
+        /** Shows the attach button (photo picker, camera, document). True by default. */
+        @JvmStatic var attachments: Boolean = true
+
         /** Opens the chat. */
         @JvmStatic @JvmOverloads
         fun open(context: Context, lang: String = "en") {
@@ -375,6 +433,6 @@ class OryksaChatActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val c = client ?: run { finish(); return }
         val lang = intent.getStringExtra("lang") ?: "en"
-        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }, appContext = { appContext }, onLink = onLink) }
+        setContent { OryksaChat(client = c, lang = lang, onClose = { finish() }, appContext = { appContext }, onLink = onLink, attachments = attachments) }
     }
 }

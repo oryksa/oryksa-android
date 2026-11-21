@@ -10,5 +10,15 @@
             android:exported="false"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
+        <!-- The camera of the attach button saves the photo here (the app's cache), then the SDK sends it. -->
+        <provider
+            android:name="com.oryksa.sdk.OryksaFileProvider"
+            android:authorities="${applicationId}.oryksa.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/oryksa_file_paths" />
+        </provider>
     </application>
 </manifest>

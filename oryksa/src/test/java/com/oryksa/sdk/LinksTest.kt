@@ -74,7 +74,7 @@ class LinksTest {
         val asked = mutableListOf<String>()
         val auth = mutableListOf<String?>()
         var status = 200
-        TinyServer { target, headers ->
+        TinyServer { target, headers, _ ->
             assertTrue(target.startsWith("/v1/client/link-preview?url="))
             asked.add(URLDecoder.decode(target.substringAfter("?url="), "UTF-8"))
             auth.add(headers["authorization"])
@@ -103,8 +103,8 @@ class LinksTest {
     }
 }
 
-/** A tiny HTTP server for the tests (one answer per request, no network outside this machine). */
-private class TinyServer(private val answer: (target: String, headers: Map<String, String>) -> Pair<Int, String>) : AutoCloseable {
+/** A tiny HTTP server for the tests (one answer per request, no network outside this machine; ASCII bodies). */
+internal class TinyServer(private val answer: (target: String, headers: Map<String, String>, body: String) -> Pair<Int, String>) : AutoCloseable {
     private val socket = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
     val port: Int get() = socket.localPort
 
@@ -122,7 +122,15 @@ private class TinyServer(private val answer: (target: String, headers: Map<Strin
                         val i = l.indexOf(':')
                         if (i > 0) headers[l.substring(0, i).trim().lowercase()] = l.substring(i + 1).trim()
                     }
-                    val (status, body) = try { answer(requestLine.split(" ")[1], headers) } catch (e: Throwable) { 599 to "${e.message}" }
+                    val length = headers["content-length"]?.toIntOrNull() ?: 0
+                    val sent = CharArray(length)
+                    var got = 0
+                    while (got < length) {
+                        val n = reader.read(sent, got, length - got)
+                        if (n < 0) break
+                        got += n
+                    }
+                    val (status, body) = try { answer(requestLine.split(" ")[1], headers, String(sent, 0, got)) } catch (e: Throwable) { 599 to "${e.message}" }
                     val bytes = body.toByteArray(Charsets.UTF_8)
                     val out = c.getOutputStream()
                     val head = listOf("HTTP/1.1 $status X", "Content-Type: application/json; charset=utf-8",

@@ -223,6 +223,8 @@ class OryksaClient(
      * Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait].
      * [appContext]: the screen the customer is on inside your app. [voice]: the reply will be heard (it also
      * carries a short `speech`). [whisper]: the customer whispered. [voiceStats]: audio numbers of the voice turn.
+     * [image]: a photo from the customer, the AI looks at it (up to 2 MB). [file]: a document (PDF, Word, text,
+     * CSV), the AI reads it (up to 8 MB).
      */
     suspend fun send(
         message: String,
@@ -230,12 +232,10 @@ class OryksaClient(
         voice: Boolean = false,
         whisper: Boolean = false,
         voiceStats: JSONObject? = null,
+        image: OryksaImage? = null,
+        file: OryksaFile? = null,
     ): OryksaReply {
-        val body = JSONObject().put("message", message)
-        appContext?.let { body.put("app_context", it.toJson()) }
-        if (voice) body.put("voice", true)
-        if (whisper) body.put("whisper", true)
-        if (voiceStats != null) body.put("platform", "android").put("voice_stats", voiceStats)
+        val body = chatBody(message, appContext, voice, whisper, voiceStats, image, file)
         val j = request("POST", "/client/chat", body)
         return OryksaReply(j.optString("status", "replied"), j.optString("reply").takeIf { it.isNotBlank() && it != "null" },
             j.optString("conversation_id").takeIf { it.isNotBlank() },
@@ -250,8 +250,10 @@ class OryksaClient(
         voice: Boolean = false,
         whisper: Boolean = false,
         voiceStats: JSONObject? = null,
+        image: OryksaImage? = null,
+        file: OryksaFile? = null,
     ): OryksaReply {
-        val r = send(message, appContext, voice, whisper, voiceStats)
+        val r = send(message, appContext, voice, whisper, voiceStats, image, file)
         if (r.status != "pending") return r
         val end = System.currentTimeMillis() + maxWaitMs
         while (System.currentTimeMillis() < end) {
@@ -298,7 +300,34 @@ class OryksaClient(
         }
     }
 
-    /** Sends a message and waits for the reply text. */
-    suspend fun sendAndWait(message: String, maxWaitMs: Long = 40_000, appContext: OryksaAppContext? = null): String? =
-        sendAndWaitReply(message, maxWaitMs, appContext).reply
+    /** Sends a message and waits for the reply text. [image] / [file]: a photo or a document (see [send]). */
+    suspend fun sendAndWait(
+        message: String,
+        maxWaitMs: Long = 40_000,
+        appContext: OryksaAppContext? = null,
+        image: OryksaImage? = null,
+        file: OryksaFile? = null,
+    ): String? = sendAndWaitReply(message, maxWaitMs, appContext, image = image, file = file).reply
+
+    internal companion object {
+        /** The JSON of `POST /v1/client/chat`. */
+        fun chatBody(
+            message: String,
+            appContext: OryksaAppContext? = null,
+            voice: Boolean = false,
+            whisper: Boolean = false,
+            voiceStats: JSONObject? = null,
+            image: OryksaImage? = null,
+            file: OryksaFile? = null,
+        ): JSONObject {
+            val body = JSONObject().put("message", message)
+            appContext?.let { body.put("app_context", it.toJson()) }
+            if (voice) body.put("voice", true)
+            if (whisper) body.put("whisper", true)
+            if (voiceStats != null) body.put("platform", "android").put("voice_stats", voiceStats)
+            if (image != null) body.put("image_base64", oryksaBase64(image.bytes)).put("image_mime", image.mime)
+            if (file != null) body.put("file_base64", oryksaBase64(file.bytes)).put("file_name", file.name).put("file_mime", file.mime)
+            return body
+        }
+    }
 }
