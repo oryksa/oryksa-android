@@ -42,7 +42,10 @@ class AttachmentsTest {
 
     @Test
     fun noAttachmentNoAttachmentFields() {
-        assertEquals(listOf("message"), OryksaClient.chatBody("Olá").keys().asSequence().toList())
+        // Since the TV SDK the chat always carries `platform` (as the Flutter SDK does): the owner's lead e-mail
+        // says which app it came from ("Android", "Fire TV").
+        assertEquals(setOf("message", "platform"), OryksaClient.chatBody("Olá").keys().asSequence().toSet())
+        assertEquals("android", OryksaClient.chatBody("Olá").getString("platform"))
     }
 
     @Test

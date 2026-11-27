@@ -13,7 +13,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /** SDK version sent in the `X-ORYKSA-SDK` header. */
-const val ORYKSA_SDK_VERSION = "1.1.4"
+const val ORYKSA_SDK_VERSION = "1.2.0"
 
 /**
  * Error returned by the ORYKSA API. [code] is stable, for example `interaction_limit_reached`,
@@ -125,17 +125,26 @@ data class OryksaAppContext(
     }
 }
 
+/** An answer with a body and its headers (lower-case names), for endpoints that answer with audio. */
+internal class OryksaExchange(val bytes: ByteArray, val headers: Map<String, String>)
+
 /**
  * In-app client. Uses a short-lived session token (`oryk_cs_...`) created by YOUR server with
  * `POST /v1/sessions`. The secret API key never goes into the app. Pass [getToken] so the client can
  * ask your server for a new token when the current one expires.
+ *
+ * [platform] is the device sent as `platform` with each request: `android` by default; on a TV pass
+ * `OryksaTvPlatform.detect(context)?.wire` (`fire_tv`, `android_tv`).
  */
 class OryksaClient(
     token: String? = null,
     private val getToken: (suspend () -> String)? = null,
     baseUrl: String = "https://api.oryksa.com/v1",
     private val timeoutMs: Int = 60_000,
+    val platform: String = "android",
 ) {
+    /** Time limit of each request, in ms. */
+    internal val timeoutMillis: Int get() = timeoutMs
     private var token: String? = token
     private val base = baseUrl.trimEnd('/')
 
@@ -150,8 +159,8 @@ class OryksaClient(
         return token?.takeIf { it.isNotBlank() } ?: throw OryksaException(401, "no_token", "No session token.")
     }
 
-    /** One HTTP exchange: returns the raw bytes of a successful answer, throws [OryksaException] otherwise. */
-    private suspend fun exchange(method: String, path: String, payload: ByteArray?, contentType: String?, force: Boolean): ByteArray {
+    /** One HTTP exchange: returns the body and headers of a successful answer, throws [OryksaException] otherwise. */
+    private suspend fun exchange(method: String, path: String, payload: ByteArray?, contentType: String?, force: Boolean): OryksaExchange {
         val tok = currentToken(force)
         return withContext(Dispatchers.IO) {
             val c = (URL(base + path).openConnection() as HttpURLConnection).apply {
@@ -175,7 +184,10 @@ class OryksaClient(
                     throw OryksaException(status, e?.optString("code")?.ifBlank { null } ?: "http_$status",
                         e?.optString("message")?.ifBlank { null } ?: "Request failed with HTTP $status")
                 }
-                bytes
+                val headers = c.headerFields.orEmpty().entries
+                    .filter { it.key != null && !it.value.isNullOrEmpty() }
+                    .associate { it.key!!.lowercase() to it.value.first() }
+                OryksaExchange(bytes, headers)
             } catch (e: IOException) {
                 throw OryksaException(0, "network_error", "Could not reach ORYKSA: ${e.message}")
             } finally {
@@ -184,16 +196,24 @@ class OryksaClient(
         }
     }
 
-    private suspend fun exchangeRetry(method: String, path: String, payload: ByteArray?, contentType: String?): ByteArray = try {
+    private suspend fun exchangeFull(method: String, path: String, payload: ByteArray?, contentType: String?): OryksaExchange = try {
         exchange(method, path, payload, contentType, false)
     } catch (e: OryksaException) {
         if ((e.code == "session_expired" || e.status == 401) && getToken != null) exchange(method, path, payload, contentType, true) else throw e
     }
 
-    private suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
+    private suspend fun exchangeRetry(method: String, path: String, payload: ByteArray?, contentType: String?): ByteArray =
+        exchangeFull(method, path, payload, contentType).bytes
+
+    /** One JSON request with the session token (renewed once when it expires). Used by `com.oryksa.sdk.tv`. */
+    internal suspend fun request(method: String, path: String, body: JSONObject? = null): JSONObject {
         val bytes = exchangeRetry(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
         return runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrElse { JSONObject() }
     }
+
+    /** A POST that answers with audio: the bytes and the headers. Throws [OryksaException] (unlike [tts]). */
+    internal suspend fun requestAudio(path: String, body: JSONObject): OryksaExchange =
+        exchangeFull("POST", path, body.toString().toByteArray(Charsets.UTF_8), "application/json")
 
     /** Name, photo, greeting and suggestions of the AI employee. */
     suspend fun agent(): OryksaAgent = OryksaAgent.fromJson(request("GET", "/client/agent"))
@@ -232,14 +252,15 @@ class OryksaClient(
         schema: JSONObject? = null,
         maxTokens: Int? = null,
         temperature: Double? = null,
-    ): OryksaAiResult = aiResult(request("POST", "/client/ai", aiBody(instructions, input, images, schema, maxTokens, temperature)))
+    ): OryksaAiResult = aiResult(request("POST", "/client/ai", aiBody(instructions, input, images, schema, maxTokens, temperature, platform)))
 
     /**
      * Sends a message. The status is `pending` when the AI needs a few more seconds: use [sendAndWait].
      * [appContext]: the screen the customer is on inside your app. [voice]: the reply will be heard (it also
      * carries a short `speech`). [whisper]: the customer whispered. [voiceStats]: audio numbers of the voice turn.
      * [image]: a photo from the customer, the AI looks at it (up to 2 MB). [file]: a document (PDF, Word, text,
-     * CSV), the AI reads it (up to 8 MB).
+     * CSV), the AI reads it (up to 8 MB). [lang]: the language of your app screen (`en`, `pt`, `br`, `es`,
+     * `fr`, `de`, `it`); the AI uses it when the message alone does not show the language.
      */
     suspend fun send(
         message: String,
@@ -249,8 +270,10 @@ class OryksaClient(
         voiceStats: JSONObject? = null,
         image: OryksaImage? = null,
         file: OryksaFile? = null,
+        lang: String? = null,
     ): OryksaReply {
-        val body = chatBody(message, appContext, voice, whisper, voiceStats, image, file)
+        val body = chatBody(message, appContext, voice, whisper, voiceStats, image, file, platform)
+        if (!lang.isNullOrBlank()) body.put("lang", lang)
         val j = request("POST", "/client/chat", body)
         return OryksaReply(j.optString("status", "replied"), j.optString("reply").takeIf { it.isNotBlank() && it != "null" },
             j.optString("conversation_id").takeIf { it.isNotBlank() },
@@ -267,8 +290,9 @@ class OryksaClient(
         voiceStats: JSONObject? = null,
         image: OryksaImage? = null,
         file: OryksaFile? = null,
+        lang: String? = null,
     ): OryksaReply {
-        val r = send(message, appContext, voice, whisper, voiceStats, image, file)
+        val r = send(message, appContext, voice, whisper, voiceStats, image, file, lang)
         if (r.status != "pending") return r
         val end = System.currentTimeMillis() + maxWaitMs
         while (System.currentTimeMillis() < end) {
@@ -304,7 +328,7 @@ class OryksaClient(
 
     /** Reports a voice turn that produced no message (nothing heard, a cut with nothing said). */
     suspend fun voiceStats(stats: JSONObject) {
-        runCatching { request("POST", "/client/voice-stats", JSONObject().put("platform", "android").put("voice_stats", stats)) }
+        runCatching { request("POST", "/client/voice-stats", JSONObject().put("platform", platform).put("voice_stats", stats)) }
     }
 
     /** Messages of this conversation. */
@@ -324,9 +348,9 @@ class OryksaClient(
         file: OryksaFile? = null,
     ): String? = sendAndWaitReply(message, maxWaitMs, appContext, image = image, file = file).reply
 
-    internal companion object {
+    companion object {
         /** The JSON of `POST /v1/client/chat`. */
-        fun chatBody(
+        internal fun chatBody(
             message: String,
             appContext: OryksaAppContext? = null,
             voice: Boolean = false,
@@ -334,31 +358,33 @@ class OryksaClient(
             voiceStats: JSONObject? = null,
             image: OryksaImage? = null,
             file: OryksaFile? = null,
+            platform: String = "android",
         ): JSONObject {
-            val body = JSONObject().put("message", message)
+            val body = JSONObject().put("message", message).put("platform", platform)
             appContext?.let { body.put("app_context", it.toJson()) }
             if (voice) body.put("voice", true)
             if (whisper) body.put("whisper", true)
-            if (voiceStats != null) body.put("platform", "android").put("voice_stats", voiceStats)
+            if (voiceStats != null) body.put("voice_stats", voiceStats)
             if (image != null) body.put("image_base64", oryksaBase64(image.bytes)).put("image_mime", image.mime)
             if (file != null) body.put("file_base64", oryksaBase64(file.bytes)).put("file_name", file.name).put("file_mime", file.mime)
             return body
         }
 
         /** The JSON of `POST /v1/client/ai`. */
-        fun aiBody(
+        internal fun aiBody(
             instructions: String? = null,
             input: String? = null,
             images: List<OryksaImage> = emptyList(),
             schema: JSONObject? = null,
             maxTokens: Int? = null,
             temperature: Double? = null,
+            platform: String = "android",
         ): JSONObject {
             require(!instructions.isNullOrEmpty() || !input.isNullOrEmpty() || images.isNotEmpty()) {
                 "ai() needs instructions, input or an image."
             }
             require(images.size <= 4) { "ai() takes at most 4 images." }
-            val body = JSONObject().put("platform", "android")
+            val body = JSONObject().put("platform", platform)
             if (!instructions.isNullOrEmpty()) body.put("instructions", instructions)
             if (!input.isNullOrEmpty()) body.put("input", input)
             if (images.isNotEmpty()) {
@@ -372,8 +398,62 @@ class OryksaClient(
             return body
         }
 
+        /**
+         * For apps WITHOUT a server of their own (for example a TV app): the client takes its session token from
+         * the business's PUBLIC chat token (ORYKSA > Connectors > Website chat). No secret key is involved, and
+         * the conversation is kept apart from the ones your server creates. Pass a random [conversationId] saved
+         * on the device to keep the history between launches. [appId]: your Android package, sent as `app_id`
+         * so the business can allow your app when it limits the chat (a filter only: the strong protection is a
+         * token from your own server).
+         */
+        fun public(
+            chatToken: String,
+            conversationId: String,
+            customerName: String? = null,
+            platform: String = "android",
+            appId: String? = null,
+            baseUrl: String = "https://api.oryksa.com/v1",
+            timeoutMs: Int = 60_000,
+        ): OryksaClient {
+            val base = baseUrl.trimEnd('/')
+            val fetch: suspend () -> String = {
+                withContext(Dispatchers.IO) {
+                    val body = JSONObject().put("widget_token", chatToken).put("conversation_id", conversationId)
+                    if (!customerName.isNullOrBlank()) body.put("customer_name", customerName)
+                    if (platform.isNotBlank()) body.put("platform", platform)
+                    if (!appId.isNullOrBlank()) body.put("app_id", appId)
+                    val c = (URL("$base/public/sessions").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = timeoutMs
+                        readTimeout = timeoutMs
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json")
+                        setRequestProperty("X-ORYKSA-SDK", "android/$ORYKSA_SDK_VERSION")
+                    }
+                    try {
+                        c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                        val status = c.responseCode
+                        val bytes = (if (status >= 400) c.errorStream else c.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
+                        val j = runCatching { JSONObject(String(bytes, Charsets.UTF_8)) }.getOrElse { JSONObject() }
+                        val t = j.optString("client_token")
+                        if (status != 201 || t.isBlank()) {
+                            val e = j.optJSONObject("error")
+                            throw OryksaException(status, e?.optString("code")?.ifBlank { null } ?: "public_session_failed",
+                                e?.optString("message")?.ifBlank { null } ?: "Could not open the chat.")
+                        }
+                        t
+                    } catch (e: IOException) {
+                        throw OryksaException(0, "network_error", "Could not reach ORYKSA: ${e.message}")
+                    } finally {
+                        c.disconnect()
+                    }
+                }
+            }
+            return OryksaClient(getToken = fetch, baseUrl = base, timeoutMs = timeoutMs, platform = platform)
+        }
+
         /** Reads an `ai_result` answer. */
-        fun aiResult(j: JSONObject): OryksaAiResult {
+        internal fun aiResult(j: JSONObject): OryksaAiResult {
             val use = j.optJSONObject("oryksa") ?: JSONObject()
             return OryksaAiResult(
                 text = j.optString("text"),

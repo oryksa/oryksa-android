@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 rootProject.name = "oryksa-android"
 include(":oryksa")
 include(":example")
+include(":example-tv")

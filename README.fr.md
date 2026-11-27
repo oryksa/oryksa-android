@@ -24,7 +24,7 @@ Maven Central (aucun dépôt supplémentaire nécessaire) :
 
 ```kotlin
 dependencies {
-    implementation("com.oryksa:sdk:1.1.4")
+    implementation("com.oryksa:sdk:1.2.0")
 }
 ```
 
@@ -32,7 +32,7 @@ Autre option, JitPack (même code, directement depuis GitHub) :
 
 ```kotlin
 // settings.gradle.kts: repositories { maven("https://jitpack.io") }
-implementation("com.github.oryksa:oryksa-android:1.1.4")
+implementation("com.github.oryksa:oryksa-android:1.2.0")
 ```
 
 ## À quoi il sert
@@ -100,6 +100,52 @@ if (r.json?.optBoolean("readable") == true) showProducts(r.json!!.getString("siz
 ```
 
 `r.text` contient la réponse en texte, `r.json` l'objet (avec un schema) et `r.interactionsSpent` les interactions utilisées. Quand les interactions du forfait sont épuisées, l'appel lève une `OryksaException` avec le status 402.
+
+## Apps TV : `com.oryksa.sdk.tv` (Android TV, Google TV, Fire TV)
+
+Ce que l'IA fait dans n'importe quelle app TV, uniquement avec la télécommande (flèches, OK et Retour), avec de gros caractères et un focus visible depuis le canapé. C'est du Jetpack Compose natif, sans web view. Les textes, les voix, les règles et les boutons viennent de votre compte ORYKSA.
+
+* **Présentatrice** : l'IA parle à l'écran avec une voix native dans la langue du spectateur, avec de grands sous-titres. Les phrases déjà dites sont rejouées depuis l'appareil, sans nouvelle voix, et sont facturées à nouveau chaque fois qu'elle les dit.
+* **Panneau d'assistant** : une conversation avec l'IA pensée pour la télécommande.
+* **Voix par le téléphone** : beaucoup de TV ne donnent pas de micro aux apps (le Fire TV Stick n'en donne pas). La TV affiche un QR code, le téléphone ouvre la page ORYKSA et ce que dit la personne arrive dans votre app sous forme de texte.
+* **`client.ai`** pour vos propres tâches, par exemple modérer ou classer.
+
+```kotlin
+// L'appareil dit s'il s'agit d'un Fire TV ou d'une Android TV (envoyé comme `platform`).
+val platform = OryksaTvPlatform.detect(context)?.wire ?: "android"
+val client = OryksaClient(getToken = { tokenDeVotreServeur() }, platform = platform)
+val tv = OryksaTv.create(context, client, locale = "fr-FR")
+
+setContent {
+    // Votre écran dans le host : la présentatrice s'affiche par-dessus, et OK / Retour la font taire pendant qu'elle parle.
+    OryksaPresenterHost(tv) { VotreEcran() }
+    if (afficherAssistant) OryksaTvAssistantDialog(tv, onDismiss = { afficherAssistant = false })
+}
+
+scope.launch { tv.presenter.say("Bienvenue ! Je suis votre présentatrice ce soir.") }
+scope.launch { tv.presenter.sayGenerated("Annonce la manche suivante en une phrase courte.", input = "Manche 2") }
+// Sous-titres seuls, sans son (facturée au prix du texte ; une phrase avec voix est facturée au prix de la voix).
+scope.launch { tv.presenter.say("Le thème de ce soir : les voyages.", voice = false) }
+
+// Le téléphone comme micro : affichez OryksaPairingCard(tv) et lisez ce qui est dit.
+scope.launch { tv.phoneVoice.texts.collect { texte -> quandLeSpectateurADit(texte) } }
+```
+
+* **Sans serveur à vous** : `OryksaTv.publicClient(context, chatToken, conversationId)` ouvre une session publique avec le token public du chat de votre entreprise, et envoie `platform` et votre package comme `app_id`. Quand votre entreprise limite son chat, elle doit mettre votre package dans la liste des apps autorisées. `app_id` est un filtre, pas une sécurité forte (il peut être imité) : la sécurité forte, c'est un token qui vient de votre propre serveur (`POST /v1/sessions`).
+* **Langues** : le serveur ORYKSA choisit la voix et les textes pour la locale. Il y a des voix natives pour pt-BR, pt-PT, es-ES, es-419, fr-FR, de-DE, en-US et en-GB, et les autres langues utilisent la voix anglaise des États-Unis.
+* **Interactions** : chaque phrase de la présentatrice est facturée selon la grille des coûts d'interaction ORYKSA chaque fois qu'elle la dit ou l'affiche (par morceau de 600 caractères au plus), la phrase répétée et la phrase en sous-titres seuls aussi : la phrase avec voix au prix de la voix, la phrase en sous-titres seuls au prix du texte. Le nombre exact arrive dans l'en-tête `X-ORYKSA-Interactions-Spent`, et une phrase que le serveur n'a pas comptée n'apparaît pas. Chaque texte entendu sur le téléphone, chaque réponse du chat et chaque réponse de `client.ai` sont aussi facturés.
+* **Micro de la TV** : `OryksaTvMic.isAvailable(context)` indique si l'appareil a une entrée audio. Le SDK ne demande jamais l'autorisation sur une TV qui n'en a pas.
+* **Dialogues** : Compose ne rend pas le focus au bouton qui a ouvert un dialogue, et avec une télécommande le focus est le seul moyen de savoir où l'on est. Passez `returnFocusTo` (le `FocusRequester` de ce bouton) à `OryksaTvAssistantDialog` et utilisez `OryksaTvDialog(onDismiss, returnFocusTo, tv = tv)` pour vos propres dialogues : avec `tv`, OK et Retour arrêtent la présentatrice pendant qu'elle parle (un dialogue reçoit les touches à part de votre écran).
+* **AndroidManifest** : le SDK déclare le micro comme non obligatoire (avec seulement `RECORD_AUDIO`, les stores en exigeraient un et cacheraient votre app sur les TV sans micro). Déclarez aussi l'écran tactile et leanback comme non obligatoires, et ajoutez la catégorie du lanceur TV avec une bannière. Voir `example-tv/`.
+
+```xml
+<uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+<uses-feature android:name="android.software.leanback" android:required="false" />
+<!-- dans l'intent-filter de l'activité, et android:banner sur l'application -->
+<category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+```
+
+Pour les tests et les démos, `OryksaTv.create(context, OryksaTvFakeBackend())` fait tout tourner sans le serveur. C'est simulé, donc cela ne prouve rien sur votre compte ORYKSA.
 
 ## Comment ça marche (et pourquoi la clé reste en sécurité)
 

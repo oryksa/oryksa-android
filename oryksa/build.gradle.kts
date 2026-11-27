@@ -20,7 +20,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // The TV screens are tested on the JVM (Robolectric) with the Compose test rule.
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -35,12 +39,18 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // The TV screens on the JVM: keys, dialogs and texts without a TV (they do not prove a real remote).
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(bom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation(bom)
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 mavenPublishing {
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
     if (project.hasProperty("signingInMemoryKey")) signAllPublications()
-    coordinates("com.oryksa", "sdk", "1.1.4")
+    coordinates("com.oryksa", "sdk", "1.2.0")
     pom {
         name.set("ORYKSA SDK for Android")
         description.set("Official Android SDK for ORYKSA AI Employees: in-app AI chat (Jetpack Compose) and API v1 client.")
